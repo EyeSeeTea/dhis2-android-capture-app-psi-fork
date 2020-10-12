@@ -1,0 +1,85 @@
+<?xml version="1.0" encoding="utf-8"?>
+<layout xmlns:tools="http://schemas.android.com/tools">
+
+    <data>
+
+        <import type="android.view.View" />
+
+        <import type="java.lang.String" />
+
+        <variable
+            name="presenter"
+            type="org.dhis2.usescases.teiDashboard.teiProgramList.TeiProgramListContract.Presenter" />
+
+        <variable
+            name="enrollment"
+            type="org.hisp.dhis.android.core.enrollment.EnrollmentModel" />
+
+        <variable
+            name="program"
+            type="org.dhis2.usescases.main.program.ProgramViewModel" />
+    </data>
+
+    <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:background="@color/white"
+        android:orientation="vertical">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <RelativeLayout
+                android:id="@+id/iconBg"
+                android:layout_width="80dp"
+                android:layout_height="80dp"
+                android:layout_gravity="center_vertical"
+                android:layout_margin="8dp"
+                android:alpha="0.5"
+                tools:background="@drawable/photo_temp_gray">
+
+                <ImageView
+                    android:id="@+id/programImage"
+                    android:layout_width="56dp"
+                    android:layout_height="56dp"
+                    android:padding="3dp"
+                    android:layout_centerInParent="true"
+                    tools:src="@drawable/ic_triangle_large_negative" />
+            </RelativeLayout>
+
+            <TextView
+                android:id="@+id/program_name"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_marginEnd="12dp"
+                android:layout_weight="2"
+                android:text='@{program.title()}'
+                android:textColor="@color/text_black_333"
+                android:textSize="16sp"
+                tools:text="ANC PROGRAM" />
+
+
+            <Button
+                android:id="@+id/action_button"
+                android:layout_width="0dp"
+                android:layout_height="36dp"
+                android:layout_marginEnd="16dp"
+                android:layout_weight="1"
+                android:background="?attr/selector_button_round_7"
+                android:onClick="@{()->presenter.onEnrollClick(program)}"
+                android:text="@string/enroll"
+                android:textAllCaps="true"
+                android:textColor="@color/white"
+                android:textSize="12sp"
+                android:textStyle="bold" />
+        </LinearLayout>
+
+        <View
+            android:layout_width="match_parent"
+            android:layout_height="1dp"
+            android:background="@color/gray_afa" />
+    </LinearLayout>
+</layout>
