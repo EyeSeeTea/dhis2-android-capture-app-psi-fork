@@ -1,0 +1,10 @@
+*.iml
+.gradle
+/local.properties
+/.idea
+.DS_Store
+/build
+/captures
+.externalNativeBuild
+/app/dhis_keystore.jks
+/app/src/main/res/raw/testing_credentials.json
