@@ -19,19 +19,25 @@
             name="isEditable"
             type="androidx.databinding.ObservableBoolean" />
 
+        <variable
+            name="fieldHint"
+            type="String" />
+
     </data>
 
-    <RelativeLayout
+    <androidx.constraintlayout.widget.ConstraintLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_margin="5dp"
+        android:minHeight="70dp"
         android:padding="5dp">
 
         <View
             android:id="@+id/dummyFocusView"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
+            app:layout_constraintTop_toTopOf="parent"
             android:focusable="true"
+            app:layout_constraintStart_toStartOf="parent"
             android:focusableInTouchMode="true" />
 
         <ImageView
@@ -39,16 +45,39 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_centerHorizontal="true"
+            app:layout_constraintTop_toTopOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintEnd_toEndOf="parent"
             android:layout_marginBottom="5dp"
             android:visibility="gone"
             tools:srcCompat="@drawable/sierra_leone"
             tools:visibility="visible" />
 
+        <TextView
+            android:id="@+id/label"
+            style="@style/FieldLabel"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@{label}"
+            app:layout_constraintTop_toBottomOf="@id/renderImage"
+            tools:text="@string/lorem" />
+
         <LinearLayout
             android:layout_width="match_parent"
+            app:layout_constraintTop_toBottomOf="@id/label"
             android:layout_height="wrap_content"
             android:layout_below="@id/renderImage"
             android:orientation="horizontal">
+
+            <ImageView
+                android:layout_gravity="center"
+                android:id="@+id/descIcon"
+                android:layout_width="wrap_content"
+                android:layout_height="match_parent"
+                android:layout_marginEnd="8dp"
+                android:visibility="gone"
+                tools:visibility="visible"
+                app:srcCompat="@drawable/ic_form_text" />
 
             <com.google.android.material.textfield.TextInputLayout
                 android:id="@+id/input_layout"
@@ -57,11 +86,11 @@
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
-                android:hint='@{label}'
+                android:hint='@{fieldHint}'
                 android:textColorHint="@color/text_black_808"
                 tools:hint="hint">
 
-                <org.dhis2.utils.custom_views.TextInputAutoCompleteTextView
+                <org.dhis2.utils.customviews.TextInputAutoCompleteTextView
                     android:id="@+id/input_editText"
                     android:layout_width="match_parent"
                     android:layout_height="match_parent"
@@ -71,6 +100,7 @@
                     android:textAlignment="textStart"
                     android:textColor="@color/text_black_333"
                     android:textSize="15sp"
+                    android:textIsSelectable="true"
                     tools:text="hello" />
 
             </com.google.android.material.textfield.TextInputLayout>
@@ -83,5 +113,5 @@
                 app:srcCompat="@drawable/ic_info_outline"
                 app:tint="?colorPrimary" />
         </LinearLayout>
-    </RelativeLayout>
+    </androidx.constraintlayout.widget.ConstraintLayout>
 </layout>

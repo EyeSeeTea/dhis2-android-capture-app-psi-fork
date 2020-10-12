@@ -10,10 +10,14 @@ import org.hisp.dhis.rules.models.RuleEffect
 
 interface RulesUtilsProvider {
 
+    fun applyRuleEffects(
+        fieldViewModels: MutableMap<String, FieldViewModel>,
+        calcResult: Result<RuleEffect>,
+        rulesActionCallbacks: RulesActionCallbacks
+    )
 
-    fun applyRuleEffects(fieldViewModels: MutableMap<String, FieldViewModel>, calcResult: Result<RuleEffect>,
-                         rulesActionCallbacks: RulesActionCallbacks)
-
-    fun applyRuleEffects(programStages: MutableMap<String, ProgramStage>, calcResult: Result<RuleEffect>)
-
+    fun applyRuleEffects(
+        programStages: MutableMap<String, ProgramStage>,
+        calcResult: Result<RuleEffect>
+    )
 }

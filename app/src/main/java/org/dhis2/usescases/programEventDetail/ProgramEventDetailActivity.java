@@ -1,81 +1,85 @@
 package org.dhis2.usescases.programEventDetail;
 
-import android.annotation.SuppressLint;
-import android.app.DatePickerDialog;
-import android.app.Dialog;
-import android.content.DialogInterface;
-import android.graphics.PorterDuff;
-import android.graphics.drawable.Drawable;
+import android.app.Activity;
+import android.content.Intent;
+import android.graphics.PointF;
+import android.graphics.RectF;
 import android.os.Bundle;
 import android.os.Handler;
+import android.transition.ChangeBounds;
+import android.transition.Transition;
+import android.transition.TransitionManager;
 import android.util.SparseBooleanArray;
-import android.util.TypedValue;
 import android.view.Gravity;
 import android.view.LayoutInflater;
-import android.view.Menu;
 import android.view.View;
 import android.view.ViewGroup;
-import android.widget.DatePicker;
 import android.widget.PopupMenu;
 
+import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AlertDialog;
-import androidx.appcompat.content.res.AppCompatResources;
-import androidx.core.content.res.ResourcesCompat;
-import androidx.core.view.GravityCompat;
+import androidx.constraintlayout.widget.ConstraintSet;
 import androidx.databinding.DataBindingUtil;
-import androidx.drawerlayout.widget.DrawerLayout;
 import androidx.lifecycle.LiveData;
 import androidx.paging.PagedList;
 import androidx.recyclerview.widget.DividerItemDecoration;
 
-import com.google.android.flexbox.FlexboxLayout;
-import com.unnamed.b.atv.model.TreeNode;
-import com.unnamed.b.atv.view.AndroidTreeView;
+import com.mapbox.geojson.BoundingBox;
+import com.mapbox.geojson.Feature;
+import com.mapbox.geojson.FeatureCollection;
+import com.mapbox.mapboxsdk.geometry.LatLng;
+import com.mapbox.mapboxsdk.maps.MapboxMap;
+import com.mapbox.mapboxsdk.plugins.markerview.MarkerView;
 
 import org.dhis2.App;
 import org.dhis2.R;
+import org.dhis2.animations.CarouselViewAnimations;
 import org.dhis2.data.tuples.Pair;
 import org.dhis2.databinding.ActivityProgramEventDetailBinding;
-import org.dhis2.databinding.CatCombFilterBinding;
-import org.dhis2.databinding.WidgetDatepickerBinding;
+import org.dhis2.databinding.InfoWindowEventBinding;
+import org.dhis2.uicomponents.map.carousel.CarouselAdapter;
+import org.dhis2.uicomponents.map.layer.LayerType;
+import org.dhis2.uicomponents.map.layer.MapLayerDialog;
+import org.dhis2.uicomponents.map.managers.EventMapManager;
+import org.dhis2.usescases.eventsWithoutRegistration.eventCapture.EventCaptureActivity;
+import org.dhis2.usescases.eventsWithoutRegistration.eventInitial.EventInitialActivity;
 import org.dhis2.usescases.general.ActivityGlobalAbstract;
-import org.dhis2.usescases.main.program.OrgUnitHolder;
+import org.dhis2.usescases.orgunitselector.OUTreeActivity;
+import org.dhis2.utils.Constants;
 import org.dhis2.utils.DateUtils;
+import org.dhis2.utils.EventMode;
 import org.dhis2.utils.HelpManager;
-import org.dhis2.utils.Period;
-import org.dhis2.utils.custom_views.RxDateDialog;
-import org.hisp.dhis.android.core.category.Category;
-import org.hisp.dhis.android.core.category.CategoryOption;
-import org.hisp.dhis.android.core.organisationunit.OrganisationUnitModel;
+import org.dhis2.utils.analytics.AnalyticsConstants;
+import org.dhis2.utils.category.CategoryDialog;
+import org.dhis2.utils.filters.FilterManager;
+import org.dhis2.utils.filters.FiltersAdapter;
+import org.dhis2.utils.granularsync.SyncStatusDialog;
+import org.hisp.dhis.android.core.category.CategoryCombo;
+import org.hisp.dhis.android.core.category.CategoryOptionCombo;
+import org.hisp.dhis.android.core.common.FeatureType;
+import org.hisp.dhis.android.core.dataelement.DataElement;
 import org.hisp.dhis.android.core.program.Program;
 
-import java.text.SimpleDateFormat;
-import java.util.ArrayList;
-import java.util.Calendar;
-import java.util.Date;
-import java.util.HashMap;
+import java.lang.reflect.Field;
+import java.lang.reflect.Method;
 import java.util.List;
-import java.util.Locale;
-import java.util.Map;
 
 import javax.inject.Inject;
 
-import io.reactivex.functions.Consumer;
 import timber.log.Timber;
 
 import static org.dhis2.R.layout.activity_program_event_detail;
-import static org.dhis2.utils.Period.DAILY;
-import static org.dhis2.utils.Period.MONTHLY;
-import static org.dhis2.utils.Period.NONE;
-import static org.dhis2.utils.Period.WEEKLY;
-import static org.dhis2.utils.Period.YEARLY;
+import static org.dhis2.uicomponents.map.geometry.mapper.featurecollection.MapEventToFeatureCollection.EVENT;
+import static org.dhis2.utils.Constants.ORG_UNIT;
+import static org.dhis2.utils.Constants.PROGRAM_UID;
+import static org.dhis2.utils.analytics.AnalyticsConstants.CLICK;
+import static org.dhis2.utils.analytics.AnalyticsConstants.SHOW_HELP;
 
-/**
- * QUADRAM. Created by Cristian on 13/02/2018.
- */
+public class ProgramEventDetailActivity extends ActivityGlobalAbstract implements ProgramEventDetailContract.View,
+        MapboxMap.OnMapClickListener {
 
-public class ProgramEventDetailActivity extends ActivityGlobalAbstract implements ProgramEventDetailContract.View {
+    private static final String FRAGMENT_TAG = "SYNC";
 
     private ActivityProgramEventDetailBinding binding;
 
@@ -83,64 +87,125 @@ public class ProgramEventDetailActivity extends ActivityGlobalAbstract implement
     ProgramEventDetailContract.Presenter presenter;
 
     @Inject
-    ProgramEventDetailAdapter adapter;
-    private Period currentPeriod = Period.NONE;
+    CarouselViewAnimations animations;
 
-    private Date chosenDateDay = new Date();
-    private ArrayList<Date> chosenDateWeek = new ArrayList<>();
-    private ArrayList<Date> chosenDateMonth = new ArrayList<>();
-    private ArrayList<Date> chosenDateYear = new ArrayList<>();
-    SimpleDateFormat monthFormat = new SimpleDateFormat("yyyy-MM", Locale.getDefault());
-    SimpleDateFormat yearFormat = new SimpleDateFormat("yyyy", Locale.getDefault());
-    private AndroidTreeView treeView;
-    private TreeNode treeNode;
-    private boolean isFilteredByCatCombo = false;
     private ProgramEventDetailLiveAdapter liveAdapter;
-    private Map<String, CategoryOption> catCombFilter;
+    private boolean backDropActive;
+    private FiltersAdapter filtersAdapter;
+    private String programUid;
+    private MarkerView currentMarker;
+    private FeatureType featureType;
+    private EventMapManager eventMapManager;
 
-    public static Bundle getBundle(String programUid, String period, List<Date> dates) {
+    public static final String EXTRA_PROGRAM_UID = "PROGRAM_UID";
+
+    public static Bundle getBundle(String programUid) {
         Bundle bundle = new Bundle();
-        bundle.putString("PROGRAM_UID", programUid);
-        bundle.putString("CURRENT_PERIOD", period);
-        bundle.putSerializable("DATES", (ArrayList) dates);
+        bundle.putString(EXTRA_PROGRAM_UID, programUid);
         return bundle;
     }
 
     @Override
     public void onCreate(@Nullable Bundle savedInstanceState) {
-        ((App) getApplicationContext()).userComponent().plus(new ProgramEventDetailModule(getIntent().getStringExtra("PROGRAM_UID"))).inject(this);
-        super.onCreate(savedInstanceState);
-        catCombFilter = new HashMap<>();
-        currentPeriod = Period.valueOf(getIntent().getStringExtra("CURRENT_PERIOD"));
+        this.programUid = getIntent().getStringExtra(EXTRA_PROGRAM_UID);
 
-        chosenDateWeek.add(new Date());
-        chosenDateMonth.add(new Date());
-        chosenDateYear.add(new Date());
+        ((App) getApplicationContext()).userComponent().plus(new ProgramEventDetailModule(this, programUid)).inject(this);
+        super.onCreate(savedInstanceState);
+
+        FilterManager.getInstance().clearCatOptCombo();
+        FilterManager.getInstance().clearEventStatus();
 
         binding = DataBindingUtil.setContentView(this, activity_program_event_detail);
 
         binding.setPresenter(presenter);
-
-        binding.drawerLayout.setDrawerLockMode(DrawerLayout.LOCK_MODE_LOCKED_CLOSED);
+        binding.setTotalFilters(FilterManager.getInstance().getTotalFilters());
 
         liveAdapter = new ProgramEventDetailLiveAdapter(presenter);
         binding.recycler.setAdapter(liveAdapter);
         binding.recycler.addItemDecoration(new DividerItemDecoration(this, DividerItemDecoration.VERTICAL));
 
+        filtersAdapter = new FiltersAdapter(FiltersAdapter.ProgramType.EVENT);
+        filtersAdapter.addEventStatus();
+        if (presenter.hasAssignment()) {
+            filtersAdapter.addAssignedToMe();
+        } else {
+            filtersAdapter.removeAssignedToMe();
+        }
+        try {
+            binding.filterLayout.setAdapter(filtersAdapter);
+
+        } catch (Exception e) {
+            Timber.e(e);
+        }
+
+        binding.mapLayerButton.setOnClickListener(view ->
+                new MapLayerDialog(eventMapManager.mapLayerManager)
+                        .show(getSupportFragmentManager(), MapLayerDialog.class.getName())
+        );
+
+        eventMapManager = new EventMapManager();
+        eventMapManager.setOnMapClickListener(this);
+        eventMapManager.init(binding.mapView);
+        presenter.init();
     }
+
+    @Override
+    protected void onStart() {
+        super.onStart();
+        if (eventMapManager != null) {
+            eventMapManager.onStart();
+        }
+    }
+
 
     @Override
     protected void onResume() {
         super.onResume();
-        adapter.clearData();
-        presenter.init(this, currentPeriod);
+        if (isMapVisible()) {
+            animations.initMapLoading(binding.mapCarousel);
+            binding.toolbarProgress.show();
+        }
+        FilterManager.getInstance().publishData();
+        if (eventMapManager != null) {
+            eventMapManager.onResume();
+        }
+        binding.addEventButton.setEnabled(true);
+        binding.setTotalFilters(FilterManager.getInstance().getTotalFilters());
+        filtersAdapter.notifyDataSetChanged();
     }
 
     @Override
     protected void onPause() {
-        presenter.onDettach();
+        if (eventMapManager != null) {
+            eventMapManager.onPause();
+        }
         super.onPause();
-        binding.treeViewContainer.removeAllViews();
+    }
+
+    @Override
+    protected void onDestroy() {
+        super.onDestroy();
+        presenter.onDettach();
+        if (eventMapManager != null) {
+            eventMapManager.onDestroy();
+        }
+        binding.mapView.onDestroy();
+
+        FilterManager.getInstance().clearEventStatus();
+        FilterManager.getInstance().clearCatOptCombo();
+    }
+
+
+    @Override
+    public void onLowMemory() {
+        super.onLowMemory();
+        binding.mapView.onLowMemory();
+    }
+
+    @Override
+    protected void onSaveInstanceState(@NonNull Bundle outState) {
+        super.onSaveInstanceState(outState);
+        binding.mapView.onSaveInstanceState(outState);
     }
 
     @Override
@@ -149,290 +214,15 @@ public class ProgramEventDetailActivity extends ActivityGlobalAbstract implement
     }
 
     @Override
-    public void openDrawer() {
-        if (!binding.drawerLayout.isDrawerOpen(GravityCompat.END)) {
-            binding.drawerLayout.openDrawer(GravityCompat.END);
-            binding.drawerLayout.setDrawerLockMode(DrawerLayout.LOCK_MODE_LOCKED_OPEN);
-        } else {
-            binding.drawerLayout.closeDrawer(GravityCompat.END);
-            binding.drawerLayout.setDrawerLockMode(DrawerLayout.LOCK_MODE_LOCKED_CLOSED);
-        }
-    }
-
-    @SuppressLint({"CheckResult", "RxLeakedSubscription"})
-    @Override
-    public void showRageDatePicker() {
-        Calendar calendar = Calendar.getInstance();
-        calendar.setMinimalDaysInFirstWeek(7);
-
-        String week = getString(R.string.week);
-        SimpleDateFormat weeklyFormat = new SimpleDateFormat("'" + week + "' w", Locale.getDefault());
-
-        if (currentPeriod != DAILY && currentPeriod != NONE) {
-            new RxDateDialog(getAbstractActivity(), currentPeriod).create().show().subscribe(selectedDates -> {
-                        if (!selectedDates.isEmpty()) {
-                            String textToShow;
-                            if (currentPeriod == WEEKLY) {
-                                textToShow = weeklyFormat.format(selectedDates.get(0)) + ", " + yearFormat.format(selectedDates.get(0));
-                                chosenDateWeek = (ArrayList<Date>) selectedDates;
-                                if (selectedDates.size() > 1)
-                                    textToShow += "... " /*+ weeklyFormat.format(selectedDates.get(1))*/;
-                            } else if (currentPeriod == MONTHLY) {
-                                textToShow = monthFormat.format(selectedDates.get(0));
-                                chosenDateMonth = (ArrayList<Date>) selectedDates;
-                                if (selectedDates.size() > 1)
-                                    textToShow += "... " /*+ monthFormat.format(selectedDates.get(1))*/;
-                            } else {
-                                textToShow = yearFormat.format(selectedDates.get(0));
-                                chosenDateYear = (ArrayList<Date>) selectedDates;
-                                if (selectedDates.size() > 1)
-                                    textToShow += "... " /*+ yearFormat.format(selectedDates.get(1))*/;
-
-                            }
-                            binding.buttonPeriodText.setText(textToShow);
-
-                            presenter.updateDateFilter(DateUtils.getInstance().getDatePeriodListFor(selectedDates, currentPeriod));
-
-                        } else {
-                            ArrayList<Date> date = new ArrayList<>();
-                            date.add(new Date());
-
-                            String text = "";
-
-                            switch (currentPeriod) {
-                                case WEEKLY:
-                                    text = weeklyFormat.format(date.get(0)) + ", " + yearFormat.format(date.get(0));
-                                    chosenDateWeek = date;
-                                    break;
-                                case MONTHLY:
-                                    text = monthFormat.format(date.get(0));
-                                    chosenDateMonth = date;
-                                    break;
-                                case YEARLY:
-                                    text = yearFormat.format(date.get(0));
-                                    chosenDateYear = date;
-                                    break;
-                                default:
-                                    break;
-                            }
-                            binding.buttonPeriodText.setText(text);
-                            presenter.updateDateFilter(DateUtils.getInstance().getDatePeriodListFor(selectedDates, currentPeriod));
-                        }
-                    },
-                    Timber::d);
-        } else if (currentPeriod == DAILY) {
-            showCustomCalendar(calendar);
-        }
-    }
-
-    private void showNativeCalendar(Calendar calendar) {
-        Calendar cal = Calendar.getInstance();
-        cal.setTime(chosenDateDay);
-        DatePickerDialog pickerDialog;
-        pickerDialog = new DatePickerDialog(getContext(), (datePicker, year, monthOfYear, dayOfMonth) -> {
-            calendar.set(year, monthOfYear, dayOfMonth);
-            Date[] dates = DateUtils.getInstance().getDateFromDateAndPeriod(calendar.getTime(), currentPeriod);
-            ArrayList<Date> selectedDates = new ArrayList<>();
-            selectedDates.add(dates[0]);
-
-            presenter.updateDateFilter(DateUtils.getInstance().getDatePeriodListFor(selectedDates, currentPeriod));
-            binding.buttonPeriodText.setText(DateUtils.getInstance().formatDate(dates[0]));
-            chosenDateDay = dates[0];
-        }, cal.get(Calendar.YEAR), cal.get(Calendar.MONTH), cal.get(Calendar.DAY_OF_MONTH));
-
-        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.LOLLIPOP) {
-            pickerDialog.setButton(DialogInterface.BUTTON_NEUTRAL, getContext().getResources().getString(R.string.change_calendar), (dialog, which) -> {
-                pickerDialog.dismiss();
-                showCustomCalendar(calendar);
-            });
-        }
-
-        pickerDialog.show();
-    }
-
-    private void showCustomCalendar(Calendar calendar) {
-        LayoutInflater layoutInflater = LayoutInflater.from(getContext());
-//        View datePickerView = layoutInflater.inflate(R.layout.widget_datepicker, null);
-        WidgetDatepickerBinding widgetBinding = WidgetDatepickerBinding.inflate(layoutInflater);
-        final DatePicker datePicker = widgetBinding.widgetDatepicker;
-
-        Calendar c = Calendar.getInstance();
-        datePicker.updateDate(
-                c.get(Calendar.YEAR),
-                c.get(Calendar.MONTH),
-                c.get(Calendar.DAY_OF_MONTH));
-
-        AlertDialog.Builder alertDialog = new AlertDialog.Builder(getContext(), R.style.DatePickerTheme);
-            /*    .setPositiveButton(R.string.action_accept, (dialog, which) -> {
-                    calendar.set(datePicker.getYear(), datePicker.getMonth(), datePicker.getDayOfMonth());
-                    Date[] dates = DateUtils.getInstance().getDateFromDateAndPeriod(calendar.getTime(), currentPeriod);
-                    ArrayList<Date> selectedDates = new ArrayList<>();
-                    selectedDates.add(dates[0]);
-
-                    presenter.updateDateFilter(DateUtils.getInstance().getDatePeriodListFor(selectedDates, currentPeriod));
-                    binding.buttonPeriodText.setText(DateUtils.getInstance().formatDate(dates[0]));
-                    chosenDateDay = dates[0];
-                })
-                .setNeutralButton(getContext().getResources().getString(R.string.change_calendar), (dialog, which) -> showNativeCalendar(calendar));*/
-
-        alertDialog.setView(widgetBinding.getRoot());
-        Dialog dialog = alertDialog.create();
-
-        widgetBinding.changeCalendarButton.setOnClickListener(calendarButton -> {
-            showNativeCalendar(calendar);
-            dialog.dismiss();
-        });
-        widgetBinding.clearButton.setOnClickListener(clearButton -> dialog.dismiss());
-        widgetBinding.acceptButton.setOnClickListener(acceptButton -> {
-            calendar.set(datePicker.getYear(), datePicker.getMonth(), datePicker.getDayOfMonth());
-            Date[] dates = DateUtils.getInstance().getDateFromDateAndPeriod(calendar.getTime(), currentPeriod);
-            ArrayList<Date> selectedDates = new ArrayList<>();
-            selectedDates.add(dates[0]);
-
-            presenter.updateDateFilter(DateUtils.getInstance().getDatePeriodListFor(selectedDates, currentPeriod));
-            binding.buttonPeriodText.setText(DateUtils.getInstance().formatDate(dates[0]));
-            chosenDateDay = dates[0];
-            dialog.dismiss();
-        });
-
-        dialog.show();
-    }
-
-
-    @Override
-    public void showTimeUnitPicker() {
-
-        Drawable drawable = null;
-        String textToShow = "";
-
-        switch (currentPeriod) {
-            case NONE:
-                currentPeriod = DAILY;
-                drawable = AppCompatResources.getDrawable(getContext(), R.drawable.ic_view_day);
-                break;
-            case DAILY:
-                currentPeriod = WEEKLY;
-                drawable = AppCompatResources.getDrawable(getContext(), R.drawable.ic_view_week);
-                break;
-            case WEEKLY:
-                currentPeriod = MONTHLY;
-                drawable = AppCompatResources.getDrawable(getContext(), R.drawable.ic_view_month);
-                break;
-            case MONTHLY:
-                currentPeriod = YEARLY;
-                drawable = AppCompatResources.getDrawable(getContext(), R.drawable.ic_view_year);
-                break;
-            case YEARLY:
-                currentPeriod = NONE;
-                drawable = AppCompatResources.getDrawable(getContext(), R.drawable.ic_view_none);
-                break;
-        }
-        binding.buttonTime.setImageDrawable(drawable);
-
-        switch (currentPeriod) {
-            case NONE:
-                presenter.updateDateFilter(new ArrayList<>());
-                textToShow = getString(R.string.period);
-                break;
-            case DAILY:
-                ArrayList<Date> datesD = new ArrayList<>();
-                datesD.add(chosenDateDay);
-                if (!datesD.isEmpty())
-                    textToShow = DateUtils.getInstance().formatDate(datesD.get(0));
-                if (!datesD.isEmpty() && datesD.size() > 1) textToShow += "... ";
-                presenter.updateDateFilter(DateUtils.getInstance().getDatePeriodListFor(datesD, currentPeriod));
-                break;
-            case WEEKLY:
-                if (!chosenDateWeek.isEmpty()) {
-                    String week = getString(R.string.week);
-                    SimpleDateFormat weeklyFormat = new SimpleDateFormat("'" + week + "' w", Locale.getDefault());
-                    textToShow = weeklyFormat.format(chosenDateWeek.get(0)) + ", " + yearFormat.format(chosenDateWeek.get(0));
-                }
-                if (!chosenDateWeek.isEmpty() && chosenDateWeek.size() > 1)
-                    textToShow += "... ";
-
-                presenter.updateDateFilter(DateUtils.getInstance().getDatePeriodListFor(chosenDateWeek, currentPeriod));
-                break;
-            case MONTHLY:
-                if (!chosenDateMonth.isEmpty()) {
-                    String dateFormatted = monthFormat.format(chosenDateMonth.get(0));
-                    textToShow = dateFormatted.substring(0, 1).toUpperCase() + dateFormatted.substring(1);
-                }
-                if (!chosenDateMonth.isEmpty() && chosenDateMonth.size() > 1) textToShow += "... ";
-
-                presenter.updateDateFilter(DateUtils.getInstance().getDatePeriodListFor(chosenDateMonth, currentPeriod));
-                break;
-            case YEARLY:
-                if (!chosenDateYear.isEmpty())
-                    textToShow = yearFormat.format(chosenDateYear.get(0));
-                if (!chosenDateYear.isEmpty() && chosenDateYear.size() > 1) textToShow += "... ";
-
-                presenter.updateDateFilter(DateUtils.getInstance().getDatePeriodListFor(chosenDateYear, currentPeriod));
-                break;
-        }
-
-        binding.buttonPeriodText.setText(textToShow);
-    }
-
-    @Override
-    public void addTree(TreeNode treeNode) {
-        this.treeNode = treeNode;
-        binding.treeViewContainer.removeAllViews();
-        binding.orgUnitApply.setOnClickListener(view -> apply());
-        binding.orgUnitCancel.setOnClickListener(view -> {
-            binding.drawerLayout.closeDrawer(GravityCompat.END);
-            binding.drawerLayout.setDrawerLockMode(DrawerLayout.LOCK_MODE_LOCKED_CLOSED);
-
-        });
-        binding.orgUnitAll.setOnClickListener(view -> {
-            treeView.selectAll(false);
-            for (TreeNode node : treeView.getSelected()) {
-                ((OrgUnitHolder) node.getViewHolder()).check();
+    public void showFilterProgress() {
+        runOnUiThread(() -> {
+            if (isMapVisible()){
+                binding.toolbarProgress.setVisibility(View.VISIBLE);
+                binding.toolbarProgress.show();
+            } else {
+                binding.progressLayout.setVisibility(View.VISIBLE);
             }
         });
-
-        binding.orgUnitUnselectAll.setOnClickListener(view -> {
-            for (TreeNode node : treeView.getSelected()) {
-                ((OrgUnitHolder) node.getViewHolder()).uncheck();
-                ((OrgUnitHolder) node.getViewHolder()).update();
-            }
-            treeView.deselectAll();
-            binding.buttonOrgUnit.setText(String.format(getString(R.string.org_unit_filter), treeView.getSelected().size()));
-
-        });
-        treeView = new AndroidTreeView(getContext(), treeNode);
-
-        treeView.setDefaultContainerStyle(R.style.TreeNodeStyle, false);
-        treeView.setSelectionModeEnabled(true);
-        treeView.setUseAutoToggle(false);
-
-        binding.treeViewContainer.addView(treeView.getView());
-        if (presenter.getOrgUnits().size() < 25)
-            treeView.expandAll();
-
-        treeView.setDefaultNodeClickListener((node, value) -> {
-            if (treeView.getSelected().size() == 1 && !node.isSelected()) {
-                binding.buttonOrgUnit.setText(String.format(getString(R.string.org_unit_filter), treeView.getSelected().size()));
-            } else if (treeView.getSelected().size() > 1) {
-                binding.buttonOrgUnit.setText(String.format(getString(R.string.org_unit_filter), treeView.getSelected().size()));
-
-                if (node.getChildren().isEmpty())
-                    presenter.onExpandOrgUnitNode(node, ((OrganisationUnitModel) node.getValue()).uid());
-                else
-                    node.setExpanded(node.isExpanded());
-            }
-        });
-
-        binding.buttonOrgUnit.setText(String.format(getString(R.string.org_unit_filter), treeView.getSelected().size()));
-    }
-
-    @Override
-    public Consumer<Pair<TreeNode, List<TreeNode>>> addNodeToTree() {
-        return node -> {
-            for (TreeNode childNode : node.val1())
-                treeView.addNode(node.val0(), childNode);
-            treeView.expandAll();
-        };
     }
 
     @Override
@@ -442,12 +232,27 @@ public class ProgramEventDetailActivity extends ActivityGlobalAbstract implement
             liveAdapter.submitList(pagedList, () -> {
                 if (binding.recycler.getAdapter() != null && binding.recycler.getAdapter().getItemCount() == 0) {
                     binding.emptyTeis.setVisibility(View.VISIBLE);
+                    binding.recycler.setVisibility(View.GONE);
                 } else {
                     binding.emptyTeis.setVisibility(View.GONE);
+                    binding.recycler.setVisibility(View.VISIBLE);
                 }
             });
 
         });
+
+    }
+
+    @Override
+    public void setOptionComboAccess(Boolean canCreateEvent) {
+        switch (binding.addEventButton.getVisibility()) {
+            case View.VISIBLE:
+                binding.addEventButton.setVisibility(canCreateEvent ? View.VISIBLE : View.GONE);
+                break;
+            case View.GONE:
+                binding.addEventButton.setVisibility(View.GONE);
+                break;
+        }
 
     }
 
@@ -462,102 +267,53 @@ public class ProgramEventDetailActivity extends ActivityGlobalAbstract implement
     }
 
     @Override
-    public void setCatComboOptions(List<Category> categories) {
-        if (binding.filterLayout.getChildCount() > 2)
-            binding.filterLayout.removeViews(2, binding.filterLayout.getChildCount() - 1);
-        if (categories != null && !categories.isEmpty()) {
-            for (Category category : categories) {
-                CatCombFilterBinding catCombFilterBinding = CatCombFilterBinding.inflate(LayoutInflater.from(this));
-                PopupMenu menu = new PopupMenu(catCombFilterBinding.catCombo.getContext(), catCombFilterBinding.catCombo, Gravity.BOTTOM);
-                menu.getMenu().add(Menu.NONE, Menu.NONE, 0, category.displayName());
-                for (CategoryOption catOption : category.categoryOptions())
-                    menu.getMenu().add(Menu.NONE, Menu.NONE, category.categoryOptions().indexOf(catOption) + 1, catOption.displayName());
-                catCombFilterBinding.catCombo.setOnClickListener(view -> menu.show());
-                menu.setOnMenuItemClickListener(item -> {
-                    int position = item.getOrder();
-                    if (position == 0) {
-                        catCombFilter.remove(category.uid());
-                        isFilteredByCatCombo = !catCombFilter.isEmpty();
-                        presenter.updateCatOptCombFilter(new ArrayList<>(catCombFilter.values()));
-                        catCombFilterBinding.catCombo.setText(category.displayName());
-                    } else {
-                        CategoryOption categoryOption = category.categoryOptions().get(position - 1);
-                        isFilteredByCatCombo = true;
-                        catCombFilter.put(category.uid(), categoryOption);
-                        presenter.updateCatOptCombFilter(new ArrayList<>(catCombFilter.values()));
-                        catCombFilterBinding.catCombo.setText(categoryOption.displayName());
-                    }
-                    return false;
-                });
-
-                FlexboxLayout.LayoutParams lp = new FlexboxLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT,
-                        (int) TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, 40, getResources().getDisplayMetrics()));
-                lp.setFlexBasisPercent(50f);
-                lp.setMargins(0, 10, 5, 0);
-                catCombFilterBinding.getRoot().setLayoutParams(lp);
-                catCombFilterBinding.catCombo.setText(category.displayName());
-                binding.filterLayout.addView(catCombFilterBinding.getRoot());
-
-            }
-        }
-    }
-
-    @Override
     public void showHideFilter() {
-        binding.filterLayout.setVisibility(binding.filterLayout.getVisibility() == View.VISIBLE ? View.GONE : View.VISIBLE);
-        checkFilterEnabled();
-    }
+        Transition transition = new ChangeBounds();
+        transition.setDuration(200);
+        TransitionManager.beginDelayedTransition(binding.backdropLayout, transition);
+        backDropActive = !backDropActive;
+        ConstraintSet initSet = new ConstraintSet();
+        initSet.clone(binding.backdropLayout);
+        binding.filterOpen.setVisibility(backDropActive ? View.VISIBLE : View.GONE);
 
-    private void checkFilterEnabled() {
-        if (binding.filterLayout.getVisibility() == View.VISIBLE) {
-            binding.filter.setBackgroundColor(getPrimaryColor());
-            binding.filter.setColorFilter(getResources().getColor(R.color.white), PorterDuff.Mode.SRC_IN);
-            binding.filter.setBackgroundResource(0);
+        if (backDropActive) {
+            initSet.connect(R.id.eventsLayout, ConstraintSet.TOP, R.id.filterLayout, ConstraintSet.BOTTOM, 50);
+        } else {
+            initSet.connect(R.id.eventsLayout, ConstraintSet.TOP, R.id.backdropGuideTop, ConstraintSet.BOTTOM, 0);
         }
-        // when filter layout is hidden
-        else {
-            // not applied period filter
-            if (currentPeriod == Period.NONE && areAllOrgUnitsSelected() && !isFilteredByCatCombo) {
-                binding.filter.setBackgroundColor(getPrimaryColor());
-                binding.filter.setColorFilter(getResources().getColor(R.color.white), PorterDuff.Mode.SRC_IN);
-                binding.filter.setBackgroundResource(0);
-            }
-            // applied period filter
-            else {
-                binding.filter.setBackgroundColor(ResourcesCompat.getColor(getResources(), R.color.white, getTheme()));
-                binding.filter.setColorFilter(getPrimaryColor(), PorterDuff.Mode.SRC_IN);
-                binding.filter.setBackgroundResource(R.drawable.white_circle);
-            }
-        }
-    }
 
-    public boolean areAllOrgUnitsSelected() {
-        return treeNode != null && treeNode.getChildren().size() == treeView.getSelected().size();
+        initSet.applyTo(binding.backdropLayout);
     }
 
     @Override
-    public void apply() {
-        if (treeView != null && !treeView.getSelected().isEmpty()) {
-            binding.drawerLayout.closeDrawers();
-            binding.drawerLayout.setDrawerLockMode(DrawerLayout.LOCK_MODE_LOCKED_CLOSED);
+    public void clearFilters() {
+        filtersAdapter.notifyDataSetChanged();
+    }
 
-            List<String> orgUnitsUids = new ArrayList<>();
-            for (TreeNode treeNode : treeView.getSelected()) {
-                orgUnitsUids.add(((OrganisationUnitModel) treeNode.getValue()).uid());
-            }
+    @Override
+    public void setFeatureType(FeatureType type) {
+        this.featureType = type;
+    }
 
-            if (treeView.getSelected().size() >= 1) {
-                binding.buttonOrgUnit.setText(String.format(getString(R.string.org_unit_filter), treeView.getSelected().size()));
-            }
-            presenter.updateOrgUnitFilter(orgUnitsUids);
-
-        } else
-            displayMessage(getString(R.string.org_unit_selection_warning));
+    @Override
+    public void startNewEvent() {
+        analyticsHelper().setEvent(AnalyticsConstants.CREATE_EVENT, AnalyticsConstants.DATA_CREATION, AnalyticsConstants.CREATE_EVENT);
+        binding.addEventButton.setEnabled(false);
+        Bundle bundle = new Bundle();
+        bundle.putString(PROGRAM_UID, programUid);
+        startActivity(EventInitialActivity.class, bundle, false, false, null);
     }
 
     @Override
     public void setWritePermission(Boolean canWrite) {
-        binding.addEventButton.setVisibility(canWrite ? View.VISIBLE : View.GONE);
+        switch (binding.addEventButton.getVisibility()) {
+            case View.VISIBLE:
+                binding.addEventButton.setVisibility(canWrite ? View.VISIBLE : View.GONE);
+                break;
+            case View.GONE:
+                binding.addEventButton.setVisibility(View.GONE);
+                break;
+        }
         if (binding.addEventButton.getVisibility() == View.VISIBLE) {
             binding.emptyTeis.setText(R.string.empty_tei_add);
         } else {
@@ -577,12 +333,230 @@ public class ProgramEventDetailActivity extends ActivityGlobalAbstract implement
     }
 
     @Override
-    public void orgUnitProgress(boolean showProgress) {
-        binding.orgUnitProgress.setVisibility(showProgress ? View.VISIBLE : View.GONE);
+    public void updateFilters(int totalFilters) {
+        binding.setTotalFilters(totalFilters);
+        binding.executePendingBindings();
+    }
+
+    @Override
+    public void setCatOptionComboFilter(Pair<CategoryCombo, List<CategoryOptionCombo>> categoryOptionCombos) {
+        if (!categoryOptionCombos.val0().isDefault()) {
+            filtersAdapter.addCatOptCombFilter(categoryOptionCombos);
+        }
+    }
+
+    @Override
+    public void setTextTypeDataElementsFilter(List<DataElement> textTypeDataElementsFilter) {
+        filtersAdapter.addTextValueFilter(textTypeDataElementsFilter);
+    }
+
+    @Override
+    public void showPeriodRequest(FilterManager.PeriodRequest periodRequest) {
+        if (periodRequest == FilterManager.PeriodRequest.FROM_TO) {
+            DateUtils.getInstance().showFromToSelector(this, FilterManager.getInstance()::addPeriod);
+        } else {
+            DateUtils.getInstance().showPeriodDialog(this, datePeriods -> {
+                        FilterManager.getInstance().addPeriod(datePeriods);
+                    },
+                    true);
+        }
+    }
+
+    @Override
+    public void openOrgUnitTreeSelector() {
+        Intent ouTreeIntent = new Intent(this, OUTreeActivity.class);
+        Bundle bundle = OUTreeActivity.Companion.getBundle(programUid);
+        ouTreeIntent.putExtras(bundle);
+        startActivityForResult(ouTreeIntent, FilterManager.OU_TREE);
+    }
+
+    @Override
+    public void onActivityResult(int requestCode, int resultCode, @Nullable Intent data) {
+        if (requestCode == FilterManager.OU_TREE && resultCode == Activity.RESULT_OK) {
+            filtersAdapter.notifyDataSetChanged();
+            updateFilters(FilterManager.getInstance().getTotalFilters());
+        }
+        super.onActivityResult(requestCode, resultCode, data);
     }
 
     @Override
     public void showTutorial(boolean shaked) {
         setTutorial();
+    }
+
+    @Override
+    public void setMap(FeatureCollection featureCollection, BoundingBox boundingBox, List<ProgramEventViewModel> programEventViewModels) {
+        eventMapManager.update(
+                featureCollection,
+                boundingBox,
+                featureType
+        );
+
+        if (binding.mapCarousel.getAdapter() == null) {
+            CarouselAdapter carouselAdapter = new CarouselAdapter.Builder()
+                    .addOnSyncClickListener(
+                            teiUid -> {
+                                if (binding.mapCarousel.getCarouselEnabled()) {
+                                    presenter.onSyncIconClick(teiUid);
+                                }
+                                return true;
+                            })
+                    .addOnEventClickListener((teiUid, orgUnit) -> {
+                        if (binding.mapCarousel.getCarouselEnabled()) {
+                            presenter.onEventClick(teiUid, orgUnit);
+                        }
+                        return true;
+                    })
+                    .build();
+            binding.mapCarousel.setAdapter(carouselAdapter);
+            binding.mapCarousel.attachToMapManager(eventMapManager, () -> true);
+            carouselAdapter.addItems(programEventViewModels);
+        } else {
+            ((CarouselAdapter) binding.mapCarousel.getAdapter()).updateAllData(programEventViewModels);
+        }
+
+        animations.endMapLoading(binding.mapCarousel);
+        binding.toolbarProgress.hide();
+    }
+
+    @Override
+    public void setEventInfo(Pair<ProgramEventViewModel, LatLng> eventInfo) {
+        if (currentMarker != null) {
+            eventMapManager.getMarkerViewManager().removeMarker(currentMarker);
+        }
+        InfoWindowEventBinding binding = InfoWindowEventBinding.inflate(LayoutInflater.from(this));
+        binding.setEvent(eventInfo.val0());
+        binding.setPresenter(presenter);
+        View view = binding.getRoot();
+        view.setOnClickListener(viewClicked ->
+                eventMapManager.getMarkerViewManager().removeMarker(currentMarker));
+        view.setOnLongClickListener(view1 -> {
+            presenter.onEventClick(eventInfo.val0().uid(), eventInfo.val0().orgUnitUid());
+            return true;
+        });
+        view.setLayoutParams(new ViewGroup.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        currentMarker = new MarkerView(eventInfo.val1(), view);
+        eventMapManager.getMarkerViewManager().addMarker(currentMarker);
+    }
+
+    @Override
+    public void showMoreOptions(View view) {
+        PopupMenu popupMenu = new PopupMenu(this, view, Gravity.BOTTOM);
+        try {
+            Field[] fields = popupMenu.getClass().getDeclaredFields();
+            for (Field field : fields) {
+                if ("mPopup".equals(field.getName())) {
+                    field.setAccessible(true);
+                    Object menuPopupHelper = field.get(popupMenu);
+                    Class<?> classPopupHelper = Class.forName(menuPopupHelper.getClass().getName());
+                    Method setForceIcons = classPopupHelper.getMethod("setForceShowIcon", boolean.class);
+                    setForceIcons.invoke(menuPopupHelper, true);
+                    break;
+                }
+            }
+        } catch (Exception e) {
+            Timber.e(e);
+        }
+        popupMenu.getMenuInflater().inflate(R.menu.event_list_menu, popupMenu.getMenu());
+        popupMenu.setOnMenuItemClickListener(item -> {
+            switch (item.getItemId()) {
+                case R.id.showHelp:
+                    analyticsHelper().setEvent(SHOW_HELP, CLICK, SHOW_HELP);
+                    showTutorial(false);
+                    break;
+                case R.id.menu_list:
+                    showMap(false);
+                    break;
+                case R.id.menu_map:
+                    showMap(true);
+                    break;
+                default:
+                    break;
+            }
+            return false;
+        });
+        boolean mapVisible = binding.mapView.getVisibility() != View.GONE;
+        boolean listVisible = binding.recycler.getVisibility() != View.GONE;
+        boolean emptyVisible = !mapVisible && !listVisible;
+        popupMenu.getMenu().getItem(0).setVisible(!emptyVisible && !mapVisible && featureType != FeatureType.NONE);
+        popupMenu.getMenu().getItem(1).setVisible(!emptyVisible && binding.recycler.getVisibility() == View.GONE && featureType != FeatureType.NONE);
+        popupMenu.show();
+    }
+
+    @Override
+    public boolean isMapVisible() {
+        return binding.mapView.getVisibility() == View.VISIBLE;
+    }
+
+    @Override
+    public void navigateToEvent(String eventId, String orgUnit) {
+        Bundle bundle = new Bundle();
+        bundle.putString(PROGRAM_UID, programUid);
+        bundle.putString(Constants.EVENT_UID, eventId);
+        bundle.putString(ORG_UNIT, orgUnit);
+        startActivity(EventCaptureActivity.class,
+                EventCaptureActivity.getActivityBundle(eventId, programUid, EventMode.CHECK),
+                false, false, null
+        );
+    }
+
+    @Override
+    public void showSyncDialog(String uid) {
+        SyncStatusDialog dialog = new SyncStatusDialog.Builder()
+                .setConflictType(SyncStatusDialog.ConflictType.EVENT)
+                .setUid(uid)
+                .onDismissListener(hasChanged -> {
+                    if (hasChanged)
+                        FilterManager.getInstance().publishData();
+
+                })
+                .build();
+
+        dialog.show(getSupportFragmentManager(), FRAGMENT_TAG);
+    }
+
+    private void showMap(boolean showMap) {
+        binding.recycler.setVisibility(showMap ? View.GONE : View.VISIBLE);
+        binding.mapView.setVisibility(showMap ? View.VISIBLE : View.GONE);
+        binding.mapLayerButton.setVisibility(showMap ? View.VISIBLE : View.GONE);
+        binding.mapCarousel.setVisibility(showMap ? View.VISIBLE : View.GONE);
+        binding.addEventButton.setVisibility(showMap ? View.GONE : View.VISIBLE);
+
+        if (showMap) {
+            binding.toolbarProgress.setVisibility(View.VISIBLE);
+            binding.toolbarProgress.show();
+            presenter.getMapData();
+        }
+    }
+
+    @Override
+    public boolean onMapClick(@NonNull LatLng point) {
+        PointF pointf = eventMapManager.getMap().getProjection().toScreenLocation(point);
+        RectF rectF = new RectF(pointf.x - 10, pointf.y - 10, pointf.x + 10, pointf.y + 10);
+        List<Feature> features = eventMapManager.getMap().queryRenderedFeatures(rectF, featureType == FeatureType.POINT ? "POINT_LAYER" : "POLYGON_LAYER");
+        if (!features.isEmpty()) {
+            Feature selectedFeature = eventMapManager.findFeature(LayerType.EVENT_LAYER.name(), EVENT, features.get(0).getStringProperty(EVENT));
+            eventMapManager.mapLayerManager.getLayer(LayerType.EVENT_LAYER.name(), true).setSelectedItem(selectedFeature);
+            binding.mapCarousel.scrollToFeature(features.get(0));
+            return true;
+        }
+        return false;
+    }
+
+    @Override
+    public void showCatOptComboDialog(String catComboUid) {
+        new CategoryDialog(
+                CategoryDialog.Type.CATEGORY_OPTION_COMBO,
+                catComboUid,
+                false,
+                null,
+                selectedCatOptionCombo -> {
+                    presenter.filterCatOptCombo(selectedCatOptionCombo);
+                    return null;
+                }
+        ).show(
+                getSupportFragmentManager(),
+                CategoryDialog.Companion.getTAG()
+        );
     }
 }

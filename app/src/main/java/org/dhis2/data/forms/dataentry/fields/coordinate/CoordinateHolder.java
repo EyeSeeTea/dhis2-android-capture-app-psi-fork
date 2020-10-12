@@ -2,16 +2,13 @@ package org.dhis2.data.forms.dataentry.fields.coordinate;
 
 
 import android.annotation.SuppressLint;
-import android.graphics.Color;
 
 import androidx.lifecycle.MutableLiveData;
 
 import org.dhis2.data.forms.dataentry.fields.FormViewHolder;
 import org.dhis2.data.forms.dataentry.fields.RowAction;
 import org.dhis2.databinding.CustomFormCoordinateBinding;
-import org.dhis2.utils.custom_views.CoordinatesView;
-
-import java.util.Locale;
+import org.dhis2.usescases.coodinates.CoordinatesView;
 
 import io.reactivex.processors.FlowableProcessor;
 
@@ -19,27 +16,22 @@ import static android.text.TextUtils.isEmpty;
 
 public class CoordinateHolder extends FormViewHolder {
 
-    private final FlowableProcessor<RowAction> processor;
     private CustomFormCoordinateBinding binding;
     private CoordinateViewModel model;
 
     @SuppressLint("CheckResult")
     CoordinateHolder(CustomFormCoordinateBinding binding, FlowableProcessor<RowAction> processor, boolean isSearchMode, MutableLiveData<String> currentSelection) {
         super(binding);
-        this.processor = processor;
         this.binding = binding;
         this.currentUid = currentSelection;
 
-        binding.formCoordinates.setCurrentLocationListener((latitude, longitude) -> {
+        binding.formCoordinates.setCurrentLocationListener(geometry -> {
                     closeKeyboard(binding.formCoordinates);
-                    if (latitude == null || longitude == null) {
-                        processor.onNext(
-                                RowAction.create(model.uid(), null, getAdapterPosition()));
-                    } else
-                        processor.onNext(
-                                RowAction.create(model.uid(),
-                                        String.format(Locale.US, "[%.5f,%.5f]", longitude, latitude),
-                                        getAdapterPosition()));
+                    processor.onNext(
+                            RowAction.create(model.uid(),
+                                    geometry == null ? null : geometry.coordinates(),
+                                    getAdapterPosition(),
+                                    model.featureType().name()));
                     clearBackground(isSearchMode);
                 }
         );
@@ -52,8 +44,7 @@ public class CoordinateHolder extends FormViewHolder {
     }
 
     void update(CoordinateViewModel coordinateViewModel) {
-        binding.formCoordinates.setProcessor(coordinateViewModel.uid(), processor);
-
+        binding.formCoordinates.setFeatureType(coordinateViewModel.featureType());
         model = coordinateViewModel;
         fieldUid = coordinateViewModel.uid();
 
@@ -81,10 +72,4 @@ public class CoordinateHolder extends FormViewHolder {
         binding.executePendingBindings();
         initFieldFocus();
     }
-
-    @Override
-    public void dispose() {
-    }
-
-
 }

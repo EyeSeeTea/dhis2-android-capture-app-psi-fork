@@ -1,21 +1,19 @@
 package org.dhis2.usescases.programEventDetail;
 
-import com.unnamed.b.atv.model.TreeNode;
+import com.mapbox.geojson.BoundingBox;
+import com.mapbox.geojson.FeatureCollection;
+import com.mapbox.mapboxsdk.geometry.LatLng;
 
 import org.dhis2.data.tuples.Pair;
 import org.dhis2.usescases.general.AbstractActivityContracts;
-import org.dhis2.utils.Period;
-import org.hisp.dhis.android.core.category.Category;
+import org.dhis2.utils.filters.FilterManager;
 import org.hisp.dhis.android.core.category.CategoryCombo;
-import org.hisp.dhis.android.core.category.CategoryOption;
-import org.hisp.dhis.android.core.category.CategoryOptionComboModel;
-import org.hisp.dhis.android.core.organisationunit.OrganisationUnitModel;
-import org.hisp.dhis.android.core.period.DatePeriod;
+import org.hisp.dhis.android.core.category.CategoryOptionCombo;
+import org.hisp.dhis.android.core.common.FeatureType;
+import org.hisp.dhis.android.core.dataelement.DataElement;
 import org.hisp.dhis.android.core.program.Program;
-import org.hisp.dhis.android.core.program.ProgramModel;
 
 import java.util.List;
-import java.util.Map;
 
 import androidx.lifecycle.LiveData;
 import androidx.paging.PagedList;
@@ -29,66 +27,71 @@ public class ProgramEventDetailContract {
 
     public interface View extends AbstractActivityContracts.View {
 
-        void addTree(TreeNode treeNode);
-
-        void openDrawer();
-
-        void showTimeUnitPicker();
-
-        void showRageDatePicker();
-
         void setProgram(Program programModel);
 
         void renderError(String message);
 
-        void setCatComboOptions( List<Category> categories);
-
         void showHideFilter();
-
-        void apply();
 
         void setWritePermission(Boolean aBoolean);
 
-        void orgUnitProgress(boolean showProgress);
-
-        Consumer<Pair<TreeNode, List<TreeNode>>> addNodeToTree();
+        void showFilterProgress();
 
         void setLiveData(LiveData<PagedList<ProgramEventViewModel>> pagedListLiveData);
+
+        void setOptionComboAccess(Boolean canCreateEvent);
+
+        void updateFilters(int totalFilters);
+
+        void setCatOptionComboFilter(
+                Pair<CategoryCombo, List<CategoryOptionCombo>> categoryOptionCombos);
+
+        void setTextTypeDataElementsFilter(List<DataElement> textTypeDataElementsFilter);
+
+        void openOrgUnitTreeSelector();
+
+        void setMap(FeatureCollection featureCollection, BoundingBox boundingBox, List<ProgramEventViewModel> programEventViewModels);
+
+        void setEventInfo(Pair<ProgramEventViewModel,LatLng> programEventViewModel);
+
+        void showPeriodRequest(FilterManager.PeriodRequest periodRequest);
+
+        void clearFilters();
+
+        void setFeatureType(FeatureType featureType);
+
+        void startNewEvent();
+
+        boolean isMapVisible();
+
+        void navigateToEvent(String eventId, String orgUnit);
+
+        void showSyncDialog(String uid);
+
+        void showCatOptComboDialog(String catComboUid);
     }
 
     public interface Presenter extends AbstractActivityContracts.Presenter {
-        void init(View view, Period period);
-
-        void updateDateFilter(List<DatePeriod> datePeriodList);
-
-        void updateOrgUnitFilter(List<String> orgUnitList);
-
-        void updateCatOptCombFilter(List<CategoryOption> categoryOptionComboMap);
-
-        void onTimeButtonClick();
-
-        void onDateRangeButtonClick();
-
-        void onOrgUnitButtonClick();
+        void init();
 
         void addEvent();
 
         void onBackClick();
 
-        void setProgram(ProgramModel program);
-
-        void onCatComboSelected(CategoryOptionComboModel categoryOptionComboModel);
-
-        void clearCatComboFilters();
-
         void onEventClick(String eventId, String orgUnit);
 
         void showFilter();
 
-        List<OrganisationUnitModel> getOrgUnits();
-
-        void onExpandOrgUnitNode(TreeNode node, String uid);
-
         void onSyncIconClick(String uid);
+
+        void getEventInfo(String eventUid, LatLng latLng);
+
+        void getMapData();
+
+        void clearFilterClick();
+
+        boolean hasAssignment();
+
+        void filterCatOptCombo(String selectedCatOptionCombo);
     }
 }

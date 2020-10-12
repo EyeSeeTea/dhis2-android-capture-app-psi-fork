@@ -18,7 +18,8 @@ import io.reactivex.processors.FlowableProcessor;
 
 public class ImageHolder extends FormViewHolder {
 
-    private final CompositeDisposable disposable;
+    public static final String NAME_CODE_DELIMITATOR = "_op_";
+
     private final FormImageBinding binding;
     private final ObservableField<String> currentSelector;
     private boolean isEditable;
@@ -29,14 +30,13 @@ public class ImageHolder extends FormViewHolder {
         super(mBinding);
         this.binding = mBinding;
         this.currentSelector = imageSelector;
-        this.disposable = new CompositeDisposable();
 
         itemView.setOnClickListener(v -> {
 
             if (isEditable) {
                 String value;
                 String[] uids = model.uid().split("\\.");
-                String[] labelAndCode = model.label().split("-");
+                String[] labelAndCode = model.label().split(NAME_CODE_DELIMITATOR);
                 String label = labelAndCode[0];
                 String code = labelAndCode[1];
                 if (imageSelector.get().equals(label)) {
@@ -55,10 +55,13 @@ public class ImageHolder extends FormViewHolder {
 
     public void update(ImageViewModel viewModel) {
         this.model = viewModel;
+        if(currentSelector.get() != null && viewModel.value() == null){
+            currentSelector.set("");
+        }
 
         this.isEditable = viewModel.editable();
         descriptionText = viewModel.description();
-        String[] labelAndCode = viewModel.label().split("-");
+        String[] labelAndCode = viewModel.label().split(NAME_CODE_DELIMITATOR);
         String labelName = labelAndCode[0];
         String code = labelAndCode[1];
         label = new StringBuilder(labelName);
@@ -84,9 +87,4 @@ public class ImageHolder extends FormViewHolder {
             binding.errorMessage.setText(null);
         }
     }
-
-    public void dispose() {
-        disposable.clear();
-    }
-
 }

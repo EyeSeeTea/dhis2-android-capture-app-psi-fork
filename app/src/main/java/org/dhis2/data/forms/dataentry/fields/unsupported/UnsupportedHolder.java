@@ -1,11 +1,8 @@
 package org.dhis2.data.forms.dataentry.fields.unsupported;
 
-import org.dhis2.R;
 import org.dhis2.data.forms.dataentry.fields.FormViewHolder;
 import org.dhis2.databinding.FormUnsupportedCustomBinding;
-import org.dhis2.utils.custom_views.UnsupportedView;
-
-import androidx.appcompat.content.res.AppCompatResources;
+import org.dhis2.utils.customviews.UnsupportedView;
 
 
 public class UnsupportedHolder extends FormViewHolder {
@@ -15,11 +12,6 @@ public class UnsupportedHolder extends FormViewHolder {
     public UnsupportedHolder(FormUnsupportedCustomBinding binding) {
         super(binding);
         unsupportedView = binding.unsupportedView;
-    }
-
-    @Override
-    public void dispose() {
-
     }
 
     public void update(UnsupportedViewModel viewModel) {

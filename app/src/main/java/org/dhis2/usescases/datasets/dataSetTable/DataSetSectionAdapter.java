@@ -1,48 +1,56 @@
 package org.dhis2.usescases.datasets.dataSetTable;
 
-import androidx.annotation.Nullable;
+import androidx.annotation.NonNull;
 import androidx.fragment.app.Fragment;
-import androidx.fragment.app.FragmentManager;
-import androidx.fragment.app.FragmentStatePagerAdapter;
+import androidx.fragment.app.FragmentActivity;
+import androidx.viewpager2.adapter.FragmentStateAdapter;
 
+import org.dhis2.usescases.datasets.dataSetTable.dataSetDetail.DataSetDetailFragment;
 import org.dhis2.usescases.datasets.dataSetTable.dataSetSection.DataSetSectionFragment;
-import org.hisp.dhis.android.core.dataelement.DataElementModel;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
 
-/**
- * QUADRAM. Created by ppajuelo on 02/10/2018.
- */
+public final class DataSetSectionAdapter extends FragmentStateAdapter {
 
-public final class DataSetSectionAdapter extends FragmentStatePagerAdapter {
+    private List<String> sections;
+    private boolean accessDataWrite;
+    private String dataSetUid;
 
-    private ArrayList<String> sectionArrays;
-
-    DataSetSectionAdapter(FragmentManager fm) {
-        super(fm);
-        sectionArrays = new ArrayList<>();
+    DataSetSectionAdapter(FragmentActivity fragmentActivity, boolean accessDataWrite, String dataSetUid) {
+        super(fragmentActivity);
+        sections = new ArrayList<>();
+        this.accessDataWrite = accessDataWrite;
+        this.dataSetUid = dataSetUid;
     }
 
-    @Override
-    public Fragment getItem(int position) {
-        return DataSetSectionFragment.create(sectionArrays.get(position));
-    }
-
-    void swapData(Map<String, List<DataElementModel>> dataElements) {
-        sectionArrays = new ArrayList<>(dataElements.keySet());
+    void swapData(List<String> sections) {
+        this.sections = sections;
         notifyDataSetChanged();
     }
 
+    @NonNull
     @Override
-    public int getCount() {
-        return sectionArrays.size();
+    public Fragment createFragment(int position) {
+        Fragment fragment;
+        if (position == 0) {
+            fragment = DataSetDetailFragment.create(dataSetUid, accessDataWrite);
+        } else {
+            fragment = DataSetSectionFragment.create(sections.get(position - 1), accessDataWrite, dataSetUid);
+        }
+        return fragment;
     }
 
-    @Nullable
     @Override
-    public CharSequence getPageTitle(int position) {
-        return sectionArrays.get(position);
+    public int getItemCount() {
+        return sections.size() + 1;
+    }
+
+    String getSectionTitle(int position) {
+        if (sections != null && sections.size() > position - 1) {
+            return sections.get(position - 1);
+        } else {
+            return "";
+        }
     }
 }

@@ -21,7 +21,7 @@ public class RelationshipViewHolder extends RecyclerView.ViewHolder {
         this.binding = binding;
     }
 
-    public void bind(RelationshipContracts.Presenter presenter, RelationshipViewModel relationships) {
+    public void bind(RelationshipPresenter presenter, RelationshipViewModel relationships) {
 
         Relationship relationship = relationships.relationship();
 
@@ -31,11 +31,14 @@ public class RelationshipViewHolder extends RecyclerView.ViewHolder {
 
         binding.setPresenter(presenter);
         binding.setRelationship(relationship);
-        String relationshipNameText = from ? relationships.relationshipType().aIsToB() : relationships.relationshipType().bIsToA();
+        String relationshipNameText = from ? relationships.relationshipType().toFromName() : relationships.relationshipType().fromToName();
         binding.relationshipName.setText(relationshipNameText != null ? relationshipNameText : relationships.relationshipType().displayName());
 
-        if (relationships.teiAttributes() != null)
-            setAttributes(relationships.teiAttributes());
+        if (from && relationships.fromAttributes() != null) {
+            setAttributes(relationships.fromAttributes());
+        } else if (!from && relationships.toAttributes() != null) {
+            setAttributes(relationships.toAttributes());
+        }
     }
 
     private void setAttributes(List<TrackedEntityAttributeValue> trackedEntityAttributeValueModels) {

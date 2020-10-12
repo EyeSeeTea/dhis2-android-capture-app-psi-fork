@@ -20,12 +20,12 @@ import org.dhis2.App;
 import org.dhis2.Bindings.Bindings;
 import org.dhis2.R;
 import org.dhis2.data.prefs.Preference;
+import org.dhis2.data.service.workManager.WorkManagerController;
 import org.dhis2.databinding.ActivitySynchronizationBinding;
 import org.dhis2.usescases.general.ActivityGlobalAbstract;
 import org.dhis2.usescases.main.MainActivity;
 import org.dhis2.utils.ColorUtils;
 import org.dhis2.utils.Constants;
-import org.hisp.dhis.android.core.D2;
 
 import javax.inject.Inject;
 
@@ -37,27 +37,23 @@ public class SyncActivity extends ActivityGlobalAbstract implements SyncContract
     @Inject
     SyncContracts.Presenter presenter;
 
+    @Inject
+    WorkManagerController workManagerController;
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
-        D2 d2 = ((App) getApplicationContext()).serverComponent().userManager().getD2();
-        SyncComponent syncComponent = ((App) getApplicationContext()).syncComponent();
-        if (syncComponent == null) {
-            // in case if we don't have cached presenter
-            syncComponent = ((App) getApplicationContext()).createSyncComponent();
-        }
-        syncComponent.inject(this);
+        ((App) getApplicationContext()).userComponent().plus(new SyncModule()).inject(this);
         super.onCreate(savedInstanceState);
-
         binding = DataBindingUtil.setContentView(this, R.layout.activity_synchronization);
         binding.setPresenter(presenter);
-        presenter.init(this,d2);
+        presenter.init(this);
         presenter.sync();
     }
 
     @Override
     protected void onResume() {
         super.onResume();
-        WorkManager.getInstance(getApplicationContext()).getWorkInfosForUniqueWorkLiveData(Constants.INITIAL_SYNC).observe(this, workInfoList -> {
+        workManagerController.getWorkInfosForUniqueWorkLiveData(Constants.INITIAL_SYNC).observe(this, workInfoList -> {
             for (WorkInfo wi : workInfoList) {
                 if (wi.getTags().contains(Constants.META_NOW))
                     handleMetaState(wi.getState());
@@ -92,8 +88,8 @@ public class SyncActivity extends ActivityGlobalAbstract implements SyncContract
             case SUCCEEDED:
                 binding.eventsText.setText(getString(R.string.data_ready));
                 Bindings.setDrawableEnd(binding.eventsText, AppCompatResources.getDrawable(this, R.drawable.animator_done));
-                presenter.scheduleSync(getSharedPreferences().getInt(Constants.TIME_META, Constants.TIME_DAILY),
-                        getSharedPreferences().getInt(Constants.TIME_DATA, Constants.TIME_DAILY));
+                /*presenter.scheduleSync(getSharedPreferences().getInt(Constants.TIME_META, Constants.TIME_DAILY),
+                        getSharedPreferences().getInt(Constants.TIME_DATA, Constants.TIME_15M));*/
                 presenter.syncReservedValues();
                 startMain();
                 break;
@@ -108,7 +104,6 @@ public class SyncActivity extends ActivityGlobalAbstract implements SyncContract
         if (binding.lottieView != null) {
             binding.lottieView.setRepeatCount(LottieDrawable.INFINITE);
             binding.lottieView.setRepeatMode(LottieDrawable.RESTART);
-            binding.lottieView.useHardwareAcceleration(true);
             binding.lottieView.enableMergePathsForKitKatAndAbove(true);
             binding.lottieView.playAnimation();
         }
@@ -116,7 +111,6 @@ public class SyncActivity extends ActivityGlobalAbstract implements SyncContract
 
     @Override
     protected void onStop() {
-        ((App) getApplicationContext()).releaseSyncComponent();
         if (binding.lottieView != null) {
             binding.lottieView.cancelAnimation();
         }
@@ -163,7 +157,7 @@ public class SyncActivity extends ActivityGlobalAbstract implements SyncContract
 
 
     public void startMain() {
-        getSharedPreferences().edit().putBoolean(Preference.INITIAL_SYNC_DONE.name(), true).apply();
+        getSharedPreferences().edit().putBoolean(Preference.INITIAL_SYNC_DONE, true).apply();
         Intent intent = new Intent(this, MainActivity.class);
         intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
         startActivity(intent);

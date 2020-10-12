@@ -1,100 +1,50 @@
 package org.dhis2.usescases.sync;
 
-import androidx.work.Constraints;
-import androidx.work.ExistingPeriodicWorkPolicy;
-import androidx.work.ExistingWorkPolicy;
-import androidx.work.NetworkType;
-import androidx.work.OneTimeWorkRequest;
-import androidx.work.PeriodicWorkRequest;
-import androidx.work.WorkManager;
-
 import org.dhis2.R;
-import org.dhis2.data.service.ReservedValuesWorker;
-import org.dhis2.data.service.SyncDataWorker;
-import org.dhis2.data.service.SyncMetadataWorker;
+import org.dhis2.data.schedulers.SchedulerProvider;
+import org.dhis2.data.service.workManager.WorkManagerController;
+import org.dhis2.data.service.workManager.WorkerItem;
+import org.dhis2.data.service.workManager.WorkerType;
 import org.dhis2.data.tuples.Pair;
 import org.dhis2.utils.Constants;
 import org.hisp.dhis.android.core.D2;
 import org.hisp.dhis.android.core.settings.SystemSetting;
 
-import java.util.concurrent.TimeUnit;
-
-import io.reactivex.android.schedulers.AndroidSchedulers;
 import io.reactivex.disposables.CompositeDisposable;
-import io.reactivex.schedulers.Schedulers;
 import timber.log.Timber;
 
 public class SyncPresenter implements SyncContracts.Presenter {
 
+    private final D2 d2;
+    private final SchedulerProvider schedulerProvider;
+    private WorkManagerController workManagerController;
     private SyncContracts.View view;
 
     private CompositeDisposable disposable;
-    private D2 d2;
 
-
-    SyncPresenter() {
+    SyncPresenter(D2 d2, SchedulerProvider schedulerProvider, WorkManagerController workManagerController) {
+        this.d2 = d2;
+        this.schedulerProvider = schedulerProvider;
+        this.workManagerController = workManagerController;
     }
 
     @Override
-    public void init(SyncContracts.View view, D2 d2) {
+    public void init(SyncContracts.View view) {
         this.view = view;
         this.disposable = new CompositeDisposable();
-        this.d2 = d2;
 
     }
 
     @Override
     public void sync() {
-        OneTimeWorkRequest.Builder syncMetaBuilder = new OneTimeWorkRequest.Builder(SyncMetadataWorker.class);
-        syncMetaBuilder.addTag(Constants.META_NOW);
-        syncMetaBuilder.setConstraints(new Constraints.Builder()
-                .setRequiredNetworkType(NetworkType.CONNECTED)
-                .build());
-        OneTimeWorkRequest metaRequest = syncMetaBuilder.build();
-
-        OneTimeWorkRequest.Builder syncDataBuilder = new OneTimeWorkRequest.Builder(SyncDataWorker.class);
-        syncDataBuilder.addTag(Constants.DATA_NOW);
-        syncDataBuilder.setConstraints(new Constraints.Builder()
-                .setRequiredNetworkType(NetworkType.CONNECTED)
-                .build());
-        OneTimeWorkRequest dataRequest = syncDataBuilder.build();
-
-        WorkManager.getInstance(view.getContext().getApplicationContext())
-                .beginUniqueWork(Constants.INITIAL_SYNC, ExistingWorkPolicy.KEEP, metaRequest)
-                .then(dataRequest)
-                .enqueue();
-
-    }
-
-    @Override
-    public void scheduleSync(int metaTime, int dataTime) {
-        if (metaTime != 0) {
-            PeriodicWorkRequest.Builder metaBuilder = new PeriodicWorkRequest.Builder(SyncMetadataWorker.class, metaTime, TimeUnit.SECONDS);
-            metaBuilder.addTag(Constants.META);
-            metaBuilder.setInitialDelay(metaTime, TimeUnit.SECONDS); //TODO: CAN BE SET TO A SPECIFIC TIME
-            metaBuilder.setConstraints(new Constraints.Builder()
-                    .setRequiredNetworkType(NetworkType.CONNECTED)
-                    .build());
-            PeriodicWorkRequest metaRequest = metaBuilder.build();
-            WorkManager.getInstance(view.getContext().getApplicationContext()).enqueueUniquePeriodicWork(Constants.META, ExistingPeriodicWorkPolicy.REPLACE, metaRequest);
-        }
-
-        if (dataTime != 0) {
-            PeriodicWorkRequest.Builder dataBuilder = new PeriodicWorkRequest.Builder(SyncDataWorker.class, dataTime, TimeUnit.SECONDS);
-            dataBuilder.addTag(Constants.DATA);
-            dataBuilder.setInitialDelay(dataTime, TimeUnit.SECONDS);//TODO: CAN BE SET TO A SPECIFIC TIME
-            dataBuilder.setConstraints(new Constraints.Builder()
-                    .setRequiredNetworkType(NetworkType.CONNECTED)
-                    .build());
-            PeriodicWorkRequest dataRequest = dataBuilder.build();
-            WorkManager.getInstance(view.getContext().getApplicationContext()).enqueueUniquePeriodicWork(Constants.DATA, ExistingPeriodicWorkPolicy.REPLACE, dataRequest);
-        }
+        workManagerController
+                .syncDataForWorkers(Constants.META_NOW, Constants.DATA_NOW, Constants.INITIAL_SYNC);
     }
 
     @Override
     public void getTheme() {
         disposable.add(
-                d2.systemSettingModule().systemSetting.getAsync()
+                d2.settingModule().systemSetting().get()
                         .map(systemSettings -> {
                             String style = "";
                             String flag = "";
@@ -113,8 +63,8 @@ public class SyncPresenter implements SyncContracts.Presenter {
                             else
                                 return Pair.create(flag, R.style.AppTheme);
                         })
-                        .subscribeOn(Schedulers.io())
-                        .observeOn(AndroidSchedulers.mainThread())
+                        .subscribeOn(schedulerProvider.io())
+                        .observeOn(schedulerProvider.ui())
                         .subscribe(flagTheme -> {
                                     view.saveFlag(flagTheme.val0());
                                     view.saveTheme(flagTheme.val1());
@@ -124,16 +74,9 @@ public class SyncPresenter implements SyncContracts.Presenter {
 
     @Override
     public void syncReservedValues() {
-
-        WorkManager.getInstance(view.getContext().getApplicationContext()).cancelAllWorkByTag("TAG_RV");
-        OneTimeWorkRequest.Builder syncDataBuilder = new OneTimeWorkRequest.Builder(ReservedValuesWorker.class);
-        syncDataBuilder.addTag("TAG_RV");
-        syncDataBuilder.setConstraints(new Constraints.Builder()
-                .setRequiredNetworkType(NetworkType.CONNECTED)
-                .build());
-        OneTimeWorkRequest request = syncDataBuilder.build();
-        WorkManager.getInstance(view.getContext().getApplicationContext()).enqueue(request);
-
+        WorkerItem workerItem = new WorkerItem(Constants.RESERVED, WorkerType.RESERVED, null, null, null, null);
+        workManagerController.cancelAllWorkByTag(workerItem.getWorkerName());
+        workManagerController.syncDataForWorker(workerItem);
     }
 
     @Override

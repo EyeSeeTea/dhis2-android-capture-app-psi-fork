@@ -1,60 +1,65 @@
 package org.dhis2.usescases.searchTrackEntity.adapters;
 
 import org.dhis2.data.tuples.Trio;
+import org.dhis2.uicomponents.map.model.CarouselItemModel;
+import org.dhis2.usescases.teiDashboard.dashboardfragments.relationships.RelationshipViewModel;
 import org.hisp.dhis.android.core.enrollment.Enrollment;
-import org.hisp.dhis.android.core.enrollment.EnrollmentModel;
-import org.hisp.dhis.android.core.trackedentity.TrackedEntityAttributeValueModel;
+import org.hisp.dhis.android.core.program.Program;
+import org.hisp.dhis.android.core.trackedentity.TrackedEntityAttributeValue;
 import org.hisp.dhis.android.core.trackedentity.TrackedEntityInstance;
-import org.hisp.dhis.android.core.trackedentity.TrackedEntityInstanceModel;
 
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Date;
+import java.util.LinkedHashMap;
 import java.util.List;
 
-public class SearchTeiModel {
+public class SearchTeiModel implements CarouselItemModel {
 
+    private LinkedHashMap<String, TrackedEntityAttributeValue> attributeValues;
+    private LinkedHashMap<String, TrackedEntityAttributeValue> textAttributeValues;
 
-    private TrackedEntityInstanceModel teiModel; //7
-
-    private List<TrackedEntityAttributeValueModel> attributeValueModels; //3,4
-    private List<EnrollmentModel> enrollmentModels;
-
-    private List<Trio<String, String, String>> enrollmentsInfo;//2
-    private boolean hasOverdue; //6
-    private boolean isOnline;//8
+    private List<Trio<String, String, String>> enrollmentsInfo;
+    private List<Program> programInfo;
+    private boolean hasOverdue;
+    private boolean isOnline;
 
     private TrackedEntityInstance tei;
-    private String profilePictureUid;
+    private String profilePicturePath;
     private String defaultTypeIcon;
 
     private Enrollment selectedEnrollment;
+    private List<Enrollment> enrollments;
+    private Date overdueDate;
+    private List<RelationshipViewModel> relationships;
+    private boolean openedAttributeList = false;
+    private String sortingKey;
+    private String sortingValue;
+    private String teTypeName;
 
     public SearchTeiModel() {
         this.tei = null;
         this.selectedEnrollment = null;
-        this.attributeValueModels = new ArrayList<>();
-        this.enrollmentModels = new ArrayList<>();
+        this.attributeValues = new LinkedHashMap<>();
+        this.textAttributeValues = new LinkedHashMap<>();
         this.enrollmentsInfo = new ArrayList<>();
+        this.programInfo = new ArrayList<>();
         this.isOnline = true;
+        this.enrollments = new ArrayList<>();
+        this.relationships = new ArrayList<>();
+        this.sortingKey = null;
+        this.sortingValue = null;
     }
 
-    public TrackedEntityInstanceModel getTeiModel() {
-        return teiModel;
-    }
-
-    public List<EnrollmentModel> getEnrollmentModels() {
-        return enrollmentModels;
-    }
-
-    public void setEnrollmentModels(List<EnrollmentModel> enrollmentModels) {
-        this.enrollmentModels = enrollmentModels;
-    }
-
-    public void addEnrollment(EnrollmentModel enrollmentModel) {
-        this.enrollmentModels.add(enrollmentModel);
-    }
 
     public void addEnrollmentInfo(Trio<String, String, String> enrollmentInfo) {
         enrollmentsInfo.add(enrollmentInfo);
+    }
+
+    public void addProgramInfo(Program program) {
+        if (!programInfo.contains(program)) {
+            programInfo.add(program);
+        }
     }
 
     public boolean isHasOverdue() {
@@ -71,33 +76,38 @@ public class SearchTeiModel {
 
     public void setOnline(boolean online) {
         isOnline = online;
-        this.attributeValueModels.clear();
-        //this.attributeValues.clear();
+        this.attributeValues.clear();
     }
 
-    public List<TrackedEntityAttributeValueModel> getAttributeValueModels() {
-        return attributeValueModels;
+    public LinkedHashMap<String, TrackedEntityAttributeValue> getAttributeValues() {
+        return attributeValues;
     }
 
-    public void addAttributeValuesModels(TrackedEntityAttributeValueModel attributeValues) {
-        this.attributeValueModels.add(attributeValues);
+    public LinkedHashMap<String, TrackedEntityAttributeValue> getTextAttributeValues() {
+        return textAttributeValues;
+    }
+
+    public void addAttributeValue(String attributeName, TrackedEntityAttributeValue attributeValues) {
+        this.attributeValues.put(attributeName, attributeValues);
+    }
+
+
+    public void addTextAttribute(String attributeName, TrackedEntityAttributeValue attributeValue) {
+        this.textAttributeValues.put(attributeName, attributeValue);
     }
 
     public void resetEnrollments() {
-        this.enrollmentModels.clear();
+        this.enrollments.clear();
         this.enrollmentsInfo.clear();
     }
 
     public List<Trio<String, String, String>> getEnrollmentInfo() {
+        Collections.sort(enrollmentsInfo, (enrollment1, enrollment2) -> enrollment1.val0().compareToIgnoreCase(enrollment2.val0()));
         return enrollmentsInfo;
     }
 
-    public void toLocalTei(TrackedEntityInstanceModel localTei) {
-        this.teiModel = localTei;
-    }
-
-    public void setAttributeValueModels(List<TrackedEntityAttributeValueModel> attributeValueModels) {
-        this.attributeValueModels = attributeValueModels;
+    public void setAttributeValues(LinkedHashMap<String, TrackedEntityAttributeValue> attributeValues) {
+        this.attributeValues = attributeValues;
     }
 
 
@@ -109,12 +119,12 @@ public class SearchTeiModel {
         return tei;
     }
 
-    public void setProfilePicture(String profilePictureUid) {
-        this.profilePictureUid = profilePictureUid;
+    public void setProfilePicture(String profilePicturePath) {
+        this.profilePicturePath = profilePicturePath;
     }
 
-    public String getProfilePictureUid() {
-        return profilePictureUid;
+    public String getProfilePicturePath() {
+        return profilePicturePath != null ? profilePicturePath : "";
     }
 
     public void setDefaultTypeIcon(String defaultTypeIcon) {
@@ -129,7 +139,67 @@ public class SearchTeiModel {
         this.selectedEnrollment = enrollment;
     }
 
-    public Enrollment getSelectedEnrollment(){
+    public Enrollment getSelectedEnrollment() {
         return this.selectedEnrollment;
+    }
+
+    public void addEnrollment(Enrollment enrollment) {
+        this.enrollments.add(enrollment);
+    }
+
+    public List<Enrollment> getEnrollments() {
+        return enrollments;
+    }
+
+    public List<Program> getProgramInfo() {
+        Collections.sort(programInfo, (program1, program2) -> program1.displayName().compareToIgnoreCase(program2.displayName()));
+        return programInfo;
+    }
+
+    public void setOverdueDate(Date dateToShow) {
+        this.overdueDate = dateToShow;
+    }
+
+    public Date getOverdueDate() {
+        return overdueDate;
+    }
+
+    public List<RelationshipViewModel> getRelationships() {
+        return relationships;
+    }
+
+    public void setRelationships(List<RelationshipViewModel> relationships) {
+        this.relationships = relationships;
+    }
+
+    public void toggleAttributeList() {
+        this.openedAttributeList = !this.openedAttributeList;
+    }
+
+    public boolean isAttributeListOpen() {
+        return this.openedAttributeList;
+    }
+
+    public void setSortingValue(kotlin.Pair<String, String> sortingKeyValue) {
+        if (sortingKeyValue != null) {
+            this.sortingKey = sortingKeyValue.getFirst();
+            this.sortingValue = sortingKeyValue.getSecond();
+        }
+    }
+
+    public String getSortingKey() {
+        return sortingKey;
+    }
+
+    public String getSortingValue() {
+        return sortingValue;
+    }
+
+    public void setTEType(String teTypeName){
+        this.teTypeName = teTypeName;
+    }
+
+    public String getTeTypeName() {
+        return teTypeName;
     }
 }

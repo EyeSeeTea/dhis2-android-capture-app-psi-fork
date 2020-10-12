@@ -1,18 +1,19 @@
 package org.dhis2;
 
-import org.dhis2.data.database.DbModule;
-import org.dhis2.data.metadata.MetadataModule;
-import org.dhis2.data.qr.QRModule;
+import org.dhis2.data.prefs.PreferenceModule;
+import org.dhis2.data.prefs.PreferenceProvider;
 import org.dhis2.data.schedulers.SchedulerModule;
 import org.dhis2.data.server.ServerComponent;
 import org.dhis2.data.server.ServerModule;
+import org.dhis2.data.service.workManager.WorkManagerModule;
 import org.dhis2.usescases.login.LoginComponent;
 import org.dhis2.usescases.login.LoginModule;
 import org.dhis2.usescases.splash.SplashComponent;
 import org.dhis2.usescases.splash.SplashModule;
-import org.dhis2.usescases.sync.SyncComponent;
-import org.dhis2.usescases.sync.SyncModule;
-import org.dhis2.utils.UtilsModule;
+import org.dhis2.utils.analytics.AnalyticsModule;
+import org.dhis2.utils.analytics.matomo.MatomoAnalyticsModule;
+import org.dhis2.utils.session.PinModule;
+import org.dhis2.utils.session.SessionComponent;
 
 import javax.inject.Singleton;
 
@@ -23,7 +24,8 @@ import dagger.Component;
  */
 @Singleton
 @Component(modules = {
-        AppModule.class, DbModule.class, SchedulerModule.class, UtilsModule.class, MetadataModule.class
+        AppModule.class, SchedulerModule.class, AnalyticsModule.class, PreferenceModule.class, WorkManagerModule.class,
+        MatomoAnalyticsModule.class
 })
 public interface AppComponent {
 
@@ -31,17 +33,18 @@ public interface AppComponent {
     interface Builder {
         Builder appModule(AppModule appModule);
 
-        Builder dbModule(DbModule dbModule);
-
         Builder schedulerModule(SchedulerModule schedulerModule);
 
-        Builder utilModule(UtilsModule utilsModule);
+        Builder analyticsModule(AnalyticsModule module);
 
-        Builder metadataModule(MetadataModule metadataModule);
+        Builder preferenceModule(PreferenceModule preferenceModule);
+
+        Builder workManagerController(WorkManagerModule workManagerModule);
 
         AppComponent build();
-        //ter
     }
+
+    PreferenceProvider preferenceProvider();
 
     //injection targets
     void inject(App app);
@@ -53,6 +56,5 @@ public interface AppComponent {
 
     LoginComponent plus(LoginModule loginContractsModule);
 
-    SyncComponent plus(SyncModule syncModule);
-
+    SessionComponent plus(PinModule pinModule);
 }

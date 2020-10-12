@@ -4,7 +4,9 @@ import android.content.Context
 import android.nfc.NfcAdapter
 import android.nfc.Tag
 import android.nfc.tech.MifareClassic
-import androidx.annotation.NonNull
+import android.nfc.tech.MifareClassic.KEY_DEFAULT
+import android.nfc.tech.MifareClassic.KEY_MIFARE_APPLICATION_DIRECTORY
+import android.nfc.tech.MifareClassic.KEY_NFC_FORUM
 import io.reactivex.Flowable
 import io.reactivex.processors.FlowableProcessor
 import io.reactivex.processors.PublishProcessor
@@ -15,28 +17,31 @@ class NFCManager internal constructor(private val context: Context) {
     private var nfcProcessor: FlowableProcessor<String>? = null
     private var initProcessor: FlowableProcessor<Boolean>? = null
 
-    fun verifyNFC() : Boolean {
+    fun verifyNFC(): Boolean {
         nfcAdt = NfcAdapter.getDefaultAdapter(context)
-        if (nfcAdt == null)
+        if (nfcAdt == null) {
             throw NFcNotEnabled()
+        }
 
-        if (!nfcAdt.isEnabled)
+        if (!nfcAdt.isEnabled) {
             return false
+        }
 
         return true
     }
 
     fun requestProgressProcessor(): Flowable<String> {
-
-        if (nfcProcessor == null)
+        if (nfcProcessor == null) {
             nfcProcessor = PublishProcessor.create()
+        }
 
         return nfcProcessor!!
     }
 
     fun requestInitProcessor(): Flowable<Boolean> {
-        if (initProcessor == null)
+        if (initProcessor == null) {
             initProcessor = PublishProcessor.create()
+        }
 
         return initProcessor!!
     }
@@ -54,19 +59,31 @@ class NFCManager internal constructor(private val context: Context) {
         initProcessor?.onNext(false)
     }
 
-    fun writeTag(tag: Tag?, sector: Int, block: Int, @NonNull subData: ByteArray): Boolean {
+    fun writeTag(tag: Tag?, sector: Int, block: Int, subData: ByteArray): Boolean {
         if (tag != null) {
             try {
                 val mifareTag = MifareClassic.get(tag)
-                if (!mifareTag.isConnected)
+                if (!mifareTag.isConnected) {
                     mifareTag.connect()
+                }
                 var auth = false
                 while (!auth)
-                    if (mifareTag.authenticateSectorWithKeyA(sector, MifareClassic.KEY_MIFARE_APPLICATION_DIRECTORY)) {
+                    if (mifareTag.authenticateSectorWithKeyA(
+                        sector, KEY_MIFARE_APPLICATION_DIRECTORY
+                    )
+                    ) {
                         auth = true
-                    } else if (mifareTag.authenticateSectorWithKeyA(sector, MifareClassic.KEY_DEFAULT)) {
+                    } else if (mifareTag.authenticateSectorWithKeyA(
+                        sector,
+                        KEY_DEFAULT
+                    )
+                    ) {
                         auth = true
-                    } else if (mifareTag.authenticateSectorWithKeyA(sector, MifareClassic.KEY_NFC_FORUM)) {
+                    } else if (mifareTag.authenticateSectorWithKeyA(
+                        sector,
+                        KEY_NFC_FORUM
+                    )
+                    ) {
                         auth = true
                     }
 
@@ -78,20 +95,16 @@ class NFCManager internal constructor(private val context: Context) {
                 mifareTag.close()
 
                 return auth
-
             } catch (e: Exception) {
                 e.printStackTrace()
                 return false
             }
-
-        } else
+        } else {
             return false
+        }
     }
 
-    fun sendMessage(text: String) {
-        if (nfcProcessor != null)
-            nfcProcessor!!.onNext(text)
-    }
+    fun sendMessage(text: String) = nfcProcessor?.let { it.onNext(text) }
 
     fun readTag(tag: Tag): ByteArray? {
         if (tag != null) {
@@ -107,25 +120,28 @@ class NFCManager internal constructor(private val context: Context) {
             }
             initProcessor?.onNext(false)
             return data
-
-        } else
+        } else {
             return null
+        }
     }
 
-    fun getBlockByte(tag: Tag, sector: Int, block: Int): ByteArray {
+    private fun getBlockByte(tag: Tag, sector: Int, block: Int): ByteArray {
         try {
             val mifareTag = MifareClassic.get(tag)
-            if (!mifareTag.isConnected)
+            if (!mifareTag.isConnected) {
                 mifareTag.connect()
+            }
 
             var auth = false
             while (!auth)
-                if (mifareTag.authenticateSectorWithKeyA(sector, MifareClassic.KEY_MIFARE_APPLICATION_DIRECTORY)) {
-                    auth = true
-                } else if (mifareTag.authenticateSectorWithKeyA(sector, MifareClassic.KEY_DEFAULT)) {
-                    auth = true
-                } else if (mifareTag.authenticateSectorWithKeyA(sector, MifareClassic.KEY_NFC_FORUM)) {
-                    auth = true
+                when {
+                    mifareTag.authenticateSectorWithKeyA(
+                        sector,
+                        KEY_MIFARE_APPLICATION_DIRECTORY
+                    ) ->
+                        auth = true
+                    mifareTag.authenticateSectorWithKeyA(sector, KEY_DEFAULT) -> auth = true
+                    mifareTag.authenticateSectorWithKeyA(sector, KEY_NFC_FORUM) -> auth = true
                 }
 
             var rn = ByteArray(16)
@@ -136,16 +152,13 @@ class NFCManager internal constructor(private val context: Context) {
             mifareTag.close()
 
             return rn
-
         } catch (e: Exception) {
             e.printStackTrace()
             return ByteArray(16)
         }
-
     }
 
     fun finish() {
         initProcessor?.onNext(false)
     }
 }
-

@@ -1,208 +1,298 @@
 package org.dhis2.usescases.settings;
 
-import android.content.Context;
-import android.content.SharedPreferences;
-
-import androidx.work.Constraints;
 import androidx.work.ExistingPeriodicWorkPolicy;
 import androidx.work.ExistingWorkPolicy;
-import androidx.work.NetworkType;
-import androidx.work.OneTimeWorkRequest;
-import androidx.work.PeriodicWorkRequest;
-import androidx.work.WorkManager;
 
-import org.dhis2.data.metadata.MetadataRepository;
-import org.dhis2.data.service.SyncDataWorker;
-import org.dhis2.data.service.SyncMetadataWorker;
+import org.dhis2.data.prefs.PreferenceProvider;
+import org.dhis2.data.schedulers.SchedulerProvider;
+import org.dhis2.data.service.workManager.WorkManagerController;
+import org.dhis2.data.service.workManager.WorkerItem;
+import org.dhis2.data.service.workManager.WorkerType;
 import org.dhis2.usescases.login.LoginActivity;
 import org.dhis2.usescases.reservedValue.ReservedValueActivity;
+import org.dhis2.usescases.settings.models.ErrorViewModel;
+import org.dhis2.usescases.settings.models.SettingsViewModel;
 import org.dhis2.utils.Constants;
+import org.dhis2.utils.analytics.AnalyticsHelper;
+import org.dhis2.usescases.settings.models.ErrorModelMapper;
 import org.hisp.dhis.android.core.D2;
-import org.hisp.dhis.android.core.common.State;
 import org.hisp.dhis.android.core.maintenance.D2Error;
+import org.hisp.dhis.android.core.settings.LimitScope;
 
 import java.io.File;
-import java.util.concurrent.TimeUnit;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
 
-import io.reactivex.android.schedulers.AndroidSchedulers;
+import io.reactivex.Single;
 import io.reactivex.disposables.CompositeDisposable;
 import io.reactivex.processors.FlowableProcessor;
 import io.reactivex.processors.PublishProcessor;
-import io.reactivex.schedulers.Schedulers;
 import timber.log.Timber;
 
-/**
- * QUADRAM. Created by lmartin on 21/03/2018.
- */
+import static org.dhis2.utils.analytics.AnalyticsConstants.CLICK;
+import static org.dhis2.utils.analytics.AnalyticsConstants.SYNC_DATA_NOW;
+import static org.dhis2.utils.analytics.AnalyticsConstants.SYNC_METADATA_NOW;
+
 
 public class SyncManagerPresenter implements SyncManagerContracts.Presenter {
 
     private final D2 d2;
-
-    private MetadataRepository metadataRepository;
+    private final SchedulerProvider schedulerProvider;
+    private final PreferenceProvider preferenceProvider;
+    private final SettingsRepository settingsRepository;
+    private final AnalyticsHelper analyticsHelper;
+    private final ErrorModelMapper errorMapper;
     private CompositeDisposable compositeDisposable;
     private SyncManagerContracts.View view;
     private FlowableProcessor<Boolean> checkData;
+    private GatewayValidator gatewayValidator;
+    private WorkManagerController workManagerController;
 
-    SyncManagerPresenter(MetadataRepository metadataRepository, D2 d2) {
-        this.metadataRepository = metadataRepository;
+    SyncManagerPresenter(
+            D2 d2,
+            SchedulerProvider schedulerProvider,
+            GatewayValidator gatewayValidator,
+            PreferenceProvider preferenceProvider,
+            WorkManagerController workManagerController,
+            SettingsRepository settingsRepository,
+            SyncManagerContracts.View view,
+            AnalyticsHelper analyticsHelper,
+            ErrorModelMapper errorMapper) {
+        this.view = view;
         this.d2 = d2;
+        this.settingsRepository = settingsRepository;
+        this.schedulerProvider = schedulerProvider;
+        this.preferenceProvider = preferenceProvider;
+        this.gatewayValidator = gatewayValidator;
+        this.workManagerController = workManagerController;
+        this.analyticsHelper = analyticsHelper;
+        this.errorMapper = errorMapper;
         checkData = PublishProcessor.create();
+        compositeDisposable = new CompositeDisposable();
     }
 
     @Override
-    public void onItemClick(int settingsItem) {
+    public void onItemClick(SettingItem settingsItem) {
         view.openItem(settingsItem);
     }
 
     @Override
-    public void init(SyncManagerContracts.View view) {
-        this.view = view;
-        this.compositeDisposable = new CompositeDisposable();
-
+    public void init() {
         compositeDisposable.add(
-                checkData
-                        .startWith(true)
-                        .flatMap(start ->
-                                metadataRepository.getDownloadedData())
-                        .subscribeOn(Schedulers.io())
-                        .observeOn(AndroidSchedulers.mainThread())
+                checkData.startWith(true)
+                        .flatMapSingle(start ->
+                                Single.zip(
+                                        settingsRepository.metaSync(),
+                                        settingsRepository.dataSync(),
+                                        settingsRepository.syncParameters(),
+                                        settingsRepository.reservedValues(),
+                                        settingsRepository.sms(),
+                                        SettingsViewModel::new
+                                ))
+                        .subscribeOn(schedulerProvider.io())
+                        .observeOn(schedulerProvider.ui())
                         .subscribe(
-                                view.setSyncData(),
+                                settingsViewModel -> {
+                                    view.setMetadataSettings(settingsViewModel.getMetadataSettingsViewModel());
+                                    view.setDataSettings(settingsViewModel.getDataSettingsViewModel());
+                                    view.setParameterSettings(settingsViewModel.getSyncParametersViewModel());
+                                    view.setReservedValuesSettings(settingsViewModel.getReservedValueSettingsViewModel());
+                                    view.setSMSSettings(settingsViewModel.getSmsSettingsViewModel());
+                                },
                                 Timber::e
+                        ));
+    }
+
+    @Override
+    public int getMetadataPeriodSetting() {
+        return settingsRepository.metaSync()
+                .blockingGet()
+                .getMetadataSyncPeriod();
+    }
+
+    @Override
+    public int getDataPeriodSetting() {
+        return settingsRepository.dataSync()
+                .blockingGet()
+                .getDataSyncPeriod();
+    }
+
+    public void validateGatewayObservable(String gateway) {
+        if (plusIsMissingOrIsTooLong(gateway)) {
+            view.showInvalidGatewayError();
+        } else if (gateway.isEmpty()) {
+            view.requestNoEmptySMSGateway();
+        } else if (isValidGateway(gateway)) {
+            view.hideGatewayError();
+        }
+    }
+
+    private boolean isValidGateway(String gateway) {
+        return gatewayValidator.validate(gateway) ||
+                (gateway.startsWith("+") && gateway.length() == 1);
+    }
+
+    private boolean plusIsMissingOrIsTooLong(String gateway) {
+        return (!gateway.startsWith("+") && gateway.length() == 1) ||
+                (gateway.length() >= GatewayValidator.Companion.getMax_size());
+    }
+
+    public boolean isGatewaySetAndValid(String gateway) {
+        if (gateway.isEmpty()) {
+            view.requestNoEmptySMSGateway();
+            return false;
+        } else if (!gatewayValidator.validate(gateway)) {
+            view.showInvalidGatewayError();
+            return false;
+        }
+        return true;
+    }
+
+    @Override
+    public void saveLimitScope(LimitScope limitScope) {
+        settingsRepository.saveLimitScope(limitScope);
+        checkData.onNext(true);
+    }
+
+    @Override
+    public void saveEventMaxCount(Integer eventsNumber) {
+        settingsRepository.saveEventsToDownload(eventsNumber);
+        checkData.onNext(true);
+    }
+
+    @Override
+    public void saveTeiMaxCount(Integer teiNumber) {
+        settingsRepository.saveTeiToDownload(teiNumber);
+        checkData.onNext(true);
+    }
+
+    @Override
+    public void saveReservedValues(Integer reservedValuesCount) {
+        settingsRepository.saveReservedValuesToDownload(reservedValuesCount);
+        checkData.onNext(true);
+    }
+
+    @Override
+    public void saveGatewayNumber(String gatewayNumber) {
+        if (isGatewaySetAndValid(gatewayNumber)) {
+            settingsRepository.saveGatewayNumber(gatewayNumber);
+        }
+    }
+
+    @Override
+    public void saveSmsResultSender(String smsResultSender) {
+        settingsRepository.saveSmsResultSender(smsResultSender);
+    }
+
+    @Override
+    public void saveSmsResponseTimeout(Integer smsResponseTimeout) {
+        settingsRepository.saveSmsResponseTimeout(smsResponseTimeout);
+    }
+
+    @Override
+    public void saveWaitForSmsResponse(boolean shouldWait) {
+        settingsRepository.saveWaitForSmsResponse(shouldWait);
+    }
+
+    @Override
+    public void enableSmsModule(boolean enableSms) {
+        if (enableSms) {
+            view.displaySMSRefreshingData();
+        }
+        compositeDisposable.add(
+                settingsRepository.enableSmsModule(enableSms)
+                        .subscribeOn(schedulerProvider.io())
+                        .observeOn(schedulerProvider.ui())
+                        .subscribe(
+                                () -> view.displaySMSEnabled(enableSms),
+                                error -> {
+                                    Timber.e(error);
+                                    view.displaySmsEnableError();
+                                }
                         )
         );
     }
 
-    /**
-     * This method allows you to create a new periodic DATA sync work with an interval defined by
-     * {@code seconds}.
-     * All scheduled works will be cancelled in order to reschedule a new one.
-     *
-     * @param seconds     period interval in seconds
-     * @param scheduleTag Name of the periodic work (DATA)
-     */
     @Override
     public void syncData(int seconds, String scheduleTag) {
-        WorkManager.getInstance(view.getContext().getApplicationContext()).cancelUniqueWork(scheduleTag);
-        PeriodicWorkRequest.Builder syncDataBuilder = new PeriodicWorkRequest.Builder(SyncDataWorker.class, seconds, TimeUnit.SECONDS);
-        syncDataBuilder.addTag(scheduleTag);
-        syncDataBuilder.setConstraints(new Constraints.Builder()
-                .setRequiredNetworkType(NetworkType.CONNECTED)
-                .build());
-        PeriodicWorkRequest request = syncDataBuilder.build();
-        WorkManager.getInstance(view.getContext().getApplicationContext()).enqueueUniquePeriodicWork(scheduleTag, ExistingPeriodicWorkPolicy.REPLACE, request);
+        preferenceProvider.setValue(Constants.TIME_DATA, seconds);
+        workManagerController.cancelUniqueWork(scheduleTag);
+        WorkerItem workerItem = new WorkerItem(scheduleTag, WorkerType.DATA, (long) seconds, null, null, ExistingPeriodicWorkPolicy.REPLACE);
+        workManagerController.enqueuePeriodicWork(workerItem);
+        checkData();
     }
 
-    /**
-     * This method allows you to create a new periodic METADATA sync work with an interval defined by
-     * {@code seconds}.
-     * All scheduled works will be cancelled in order to reschedule a new one.
-     *
-     * @param seconds     period interval in seconds
-     * @param scheduleTag Name of the periodic work (META)
-     */
     @Override
     public void syncMeta(int seconds, String scheduleTag) {
-        WorkManager.getInstance(view.getContext().getApplicationContext()).cancelUniqueWork(scheduleTag);
-        PeriodicWorkRequest.Builder syncDataBuilder = new PeriodicWorkRequest.Builder(SyncMetadataWorker.class, seconds, TimeUnit.SECONDS);
-        syncDataBuilder.addTag(scheduleTag);
-        syncDataBuilder.setConstraints(new Constraints.Builder()
-                .setRequiredNetworkType(NetworkType.CONNECTED)
-                .build());
-        PeriodicWorkRequest request = syncDataBuilder.build();
-        WorkManager.getInstance(view.getContext().getApplicationContext()).enqueueUniquePeriodicWork(scheduleTag, ExistingPeriodicWorkPolicy.REPLACE, request);
+        preferenceProvider.setValue(Constants.TIME_META, seconds);
+        workManagerController.cancelUniqueWork(scheduleTag);
+        WorkerItem workerItem = new WorkerItem(scheduleTag, WorkerType.METADATA, (long) seconds, null, null, ExistingPeriodicWorkPolicy.REPLACE);
+        workManagerController.enqueuePeriodicWork(workerItem);
+        checkData();
     }
 
-    /**
-     * This method allows you to run a DATA sync work.
-     */
     @Override
     public void syncData() {
         view.syncData();
-        OneTimeWorkRequest.Builder syncDataBuilder = new OneTimeWorkRequest.Builder(SyncDataWorker.class);
-        syncDataBuilder.addTag(Constants.DATA_NOW);
-        syncDataBuilder.setConstraints(new Constraints.Builder()
-                .setRequiredNetworkType(NetworkType.CONNECTED)
-                .build());
-        OneTimeWorkRequest request = syncDataBuilder.build();
-        WorkManager.getInstance(view.getContext().getApplicationContext()).beginUniqueWork(Constants.DATA_NOW, ExistingWorkPolicy.REPLACE, request).enqueue();
+        analyticsHelper.setEvent(SYNC_DATA_NOW, CLICK, SYNC_DATA_NOW);
+        WorkerItem workerItem = new WorkerItem(Constants.DATA_NOW, WorkerType.DATA, null, null, ExistingWorkPolicy.KEEP, null);
+        workManagerController.syncDataForWorker(workerItem);
+        checkData();
     }
 
-    /**
-     * This method allows you to run a METADATA sync work.
-     */
     @Override
     public void syncMeta() {
         view.syncMeta();
-        OneTimeWorkRequest.Builder syncDataBuilder = new OneTimeWorkRequest.Builder(SyncMetadataWorker.class);
-        syncDataBuilder.addTag(Constants.META_NOW);
-        syncDataBuilder.setConstraints(new Constraints.Builder()
-                .setRequiredNetworkType(NetworkType.CONNECTED)
-                .build());
-        OneTimeWorkRequest request = syncDataBuilder.build();
-        WorkManager.getInstance(view.getContext().getApplicationContext()).beginUniqueWork(Constants.META_NOW, ExistingWorkPolicy.REPLACE, request).enqueue();
+        analyticsHelper.setEvent(SYNC_METADATA_NOW, CLICK, SYNC_METADATA_NOW);
+        WorkerItem workerItem = new WorkerItem(Constants.META_NOW, WorkerType.METADATA, null, null, ExistingWorkPolicy.KEEP, null);
+        workManagerController.syncDataForWorker(workerItem);
     }
-
 
     @Override
     public void cancelPendingWork(String tag) {
-        WorkManager.getInstance(view.getContext().getApplicationContext()).cancelUniqueWork(tag);
+        preferenceProvider.setValue(tag.equals(Constants.DATA) ? Constants.TIME_DATA : Constants.TIME_META, 0);
+        workManagerController.cancelUniqueWork(tag);
+        checkData();
     }
 
     @Override
-    public boolean dataHasErrors() {
-        return !d2.eventModule().events.byState().in(State.ERROR).get().isEmpty() || !d2.trackedEntityModule().trackedEntityInstances.byState().in(State.ERROR).get().isEmpty();
-    }
-
-    @Override
-    public boolean dataHasWarnings() {
-        return !d2.eventModule().events.byState().in(State.WARNING).get().isEmpty() || !d2.trackedEntityModule().trackedEntityInstances.byState().in(State.WARNING).get().isEmpty();
-    }
-
-    @Override
-    public void disponse() {
+    public void dispose() {
         compositeDisposable.clear();
     }
 
     @Override
     public void resetSyncParameters() {
-        SharedPreferences prefs = view.getAbstracContext().getSharedPreferences(
-                Constants.SHARE_PREFS, Context.MODE_PRIVATE);
-        SharedPreferences.Editor editor = prefs.edit();
-
-        editor.putInt(Constants.EVENT_MAX, Constants.EVENT_MAX_DEFAULT);
-        editor.putInt(Constants.TEI_MAX, Constants.TEI_MAX_DEFAULT);
-        editor.putBoolean(Constants.LIMIT_BY_ORG_UNIT, false);
-        editor.putBoolean(Constants.LIMIT_BY_PROGRAM, false);
-
-        editor.apply();
+        preferenceProvider.setValue(Constants.EVENT_MAX, Constants.EVENT_MAX_DEFAULT);
+        preferenceProvider.setValue(Constants.TEI_MAX, Constants.TEI_MAX_DEFAULT);
+        preferenceProvider.setValue(Constants.LIMIT_BY_ORG_UNIT, false);
+        preferenceProvider.setValue(Constants.LIMIT_BY_PROGRAM, false);
 
         checkData.onNext(true);
-
     }
 
     @Override
     public void onWipeData() {
-
         view.wipeDatabase();
-
     }
 
     @Override
     public void wipeDb() {
         try {
-            WorkManager.getInstance(view.getContext().getApplicationContext()).cancelAllWork();
-            WorkManager.getInstance(view.getContext().getApplicationContext()).pruneWork();
-            d2.wipeModule().wipeEverything();
+            workManagerController.cancelAllWork();
+            workManagerController.pruneWork();
             // clearing cache data
             deleteDir(view.getAbstracContext().getCacheDir());
 
-            view.getAbstracContext().getSharedPreferences().edit().clear().apply();
+            preferenceProvider.clear();
 
-            view.startActivity(LoginActivity.class, null, true, true, null);
+            d2.wipeModule().wipeEverything();
+            d2.userModule().logOut().blockingAwait();
+
         } catch (Exception e) {
             Timber.e(e);
+        } finally {
+            view.startActivity(LoginActivity.class, null, true, true, null);
         }
     }
 
@@ -231,14 +321,32 @@ public class SyncManagerPresenter implements SyncManagerContracts.Presenter {
 
     @Override
     public void checkSyncErrors() {
-        view.showSyncErrors(metadataRepository.getSyncErrors());
+        compositeDisposable.add(Single.fromCallable(() -> {
+            List<ErrorViewModel> errors = new ArrayList<>();
+            errors.addAll(errorMapper.mapD2Error(d2.maintenanceModule().d2Errors().blockingGet()));
+            errors.addAll(errorMapper.mapConflict(d2.importModule().trackerImportConflicts().blockingGet()));
+            errors.addAll(errorMapper.mapFKViolation(d2.maintenanceModule().foreignKeyViolations().blockingGet()));
+            return errors;
+        })
+                .map(errors -> {
+                    Collections.sort(
+                            errors,
+                            (errorA, errorB) -> errorB.component1().compareTo(errorA.component1())
+                    );
+                    return errors;
+                })
+                .subscribeOn(schedulerProvider.io())
+                .observeOn(schedulerProvider.ui())
+                .subscribe(
+                        errors -> view.showSyncErrors(errors),
+                        Timber::e
+                ));
     }
 
     @Override
     public void checkData() {
         checkData.onNext(true);
     }
-
 
     private static boolean deleteDir(File dir) {
         if (dir != null && dir.isDirectory()) {

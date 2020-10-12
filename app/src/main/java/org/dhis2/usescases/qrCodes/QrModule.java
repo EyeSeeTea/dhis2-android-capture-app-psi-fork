@@ -1,10 +1,9 @@
 package org.dhis2.usescases.qrCodes;
 
-import com.squareup.sqlbrite2.BriteDatabase;
-
 import org.dhis2.data.dagger.PerActivity;
 import org.dhis2.data.qr.QRCodeGenerator;
 import org.dhis2.data.qr.QRInterface;
+import org.dhis2.data.schedulers.SchedulerProvider;
 import org.hisp.dhis.android.core.D2;
 
 import dagger.Module;
@@ -24,13 +23,13 @@ public class QrModule {
 
     @Provides
     @PerActivity
-    QrContracts.Presenter providePresenter(QRInterface qrInterface) {
-        return new QrPresenter(qrInterface);
+    QrContracts.Presenter providePresenter(QRInterface qrInterface, SchedulerProvider schedulerProvider) {
+        return new QrPresenter(qrInterface, schedulerProvider);
     }
 
     @Provides
     @PerActivity
-    QRInterface providesQRInterface(BriteDatabase briteDatabase, D2 d2) {
-        return new QRCodeGenerator(briteDatabase,d2);
+    QRInterface providesQRInterface(D2 d2) {
+        return new QRCodeGenerator(d2);
     }
 }
