@@ -20,8 +20,12 @@ import org.dhis2.core.ui.tree.TreeAdapter
 import org.dhis2.databinding.FragmentFeedbackContentBinding
 import org.dhis2.usescases.general.FragmentGlobalAbstract
 import org.dhis2.usescases.teiDashboard.TeiDashboardMobileActivity
+import org.dhis2.usescases.teiDashboard.dashboardsfragments.enrollment.EnrollmentInfo
 import org.dhis2.utils.customviews.TextInputAutoCompleteTextView
 import java.net.URL
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 import javax.inject.Inject
 
 class FeedbackContentFragment : FragmentGlobalAbstract(),
@@ -76,6 +80,13 @@ class FeedbackContentFragment : FragmentGlobalAbstract(),
             presenter.shareFeedback(binding.failedCheckBox.isChecked)
         }
 
+        adapter = TreeAdapter(listOf(FeedbackItemBinder(), FeedbackHelpItemBinder()),
+            { node: Tree<*> ->
+                presenter.expand(node )
+            })
+
+        binding.feedbackRecyclerView.adapter = adapter
+
         return binding.root
     }
 
@@ -103,30 +114,42 @@ class FeedbackContentFragment : FragmentGlobalAbstract(),
     override fun render(state: FeedbackContentState) {
         return when (state) {
             is FeedbackContentState.Loading -> renderLoading()
-            is FeedbackContentState.Loaded -> renderLoaded(state.feedback, state.position, state.validations)
+            is FeedbackContentState.Loaded -> renderLoaded(
+                state.feedback,
+                state.validations
+            )
             is FeedbackContentState.ValidationsWithError -> {
                 renderError(getString(R.string.unexpected_error_message))
                 showValidations(state.validations)
             }
             is FeedbackContentState.SharingFeedback -> shareFeedback(
-                state.feedbackText,
-                state.serverUrl,
-                state.enrollmentUID
+                state.enrollmentInfo,
+                state.serverUrl
             )
             is FeedbackContentState.NotFound -> renderError(getString(R.string.empty_tei_no_add))
             is FeedbackContentState.UnexpectedError -> renderError(getString(R.string.unexpected_error_message))
         }
     }
 
-    private fun shareFeedback(feedbackText: String, serverUrl: String, enrollmentUID: String) {
+    private fun shareFeedback(
+        enrollmentInfo: EnrollmentInfo,
+        serverUrl: String
+    ) {
         val sendIntent: Intent = Intent().apply {
             action = Intent.ACTION_SEND
 
             val url = URL(serverUrl)
+            val feedbackUrl =
+                URL("https://feedback.psi-mis.org/${url.host}/${enrollmentInfo.enrollmentUid}")
+            val dateFormat = SimpleDateFormat("dd/MM/yyyy", Locale.getDefault())
 
-            val feedbackUrl = URL("https://feedback.psi-mis.org/${url.host}/$enrollmentUID")
+            val assessmentDateText =
+                "${getString(R.string.feedback_share_conducted)}: ${dateFormat.format(enrollmentInfo.enrollmentDate)}"
+            val assessmentTypeText =
+                "${getString(R.string.feedback_share_assessment_type)}: ${enrollmentInfo.programName}"
+            val urlText = "${getString(R.string.feedback_url)} \n $feedbackUrl"
 
-            val finalText = "$feedbackText \n  ${getString(R.string.feedback_url)} \n $feedbackUrl"
+            val finalText = "$assessmentDateText\n$assessmentTypeText\n\n$urlText"
 
             putExtra(Intent.EXTRA_TEXT, finalText)
 
@@ -174,12 +197,12 @@ class FeedbackContentFragment : FragmentGlobalAbstract(),
         binding.failedCheckBox.isEnabled = false
     }
 
-    private fun renderLoaded(feedback: Tree.Root<*>, position: Int, validations: List<Validation>) {
+    private fun renderLoaded(feedback: Tree.Root<*>, validations: List<Validation>) {
         binding.msgFeedback.visibility = View.GONE
         binding.spinner.visibility = View.GONE
         binding.failedCheckBox.isEnabled = true
 
-        setFeedbackAdapter(feedback, position)
+        setFeedbackAdapter(feedback)
 
         showValidations(validations)
     }
@@ -246,14 +269,10 @@ class FeedbackContentFragment : FragmentGlobalAbstract(),
         }
     }
 
-    private fun setFeedbackAdapter(feedback: Tree.Root<*>, scrollTo: Int) {
-        val adapter = TreeAdapter(feedback, listOf(FeedbackItemBinder(), FeedbackHelpItemBinder()),
-            { node: Tree<*>, position: Int ->
-                presenter.expand(node, position)
-            })
+    private lateinit var adapter: TreeAdapter
 
-        binding.feedbackRecyclerView.adapter = adapter
-        binding.feedbackRecyclerView.smoothScrollToPosition(scrollTo)
+    private fun setFeedbackAdapter(feedback: Tree.Root<*>) {
+        adapter.refresh(feedback)
     }
 
     companion object {
