@@ -18,7 +18,6 @@ import android.view.ViewGroup;
 import android.view.inputmethod.EditorInfo;
 import android.widget.AdapterView;
 import android.widget.ArrayAdapter;
-import android.widget.TextView;
 
 import androidx.annotation.NonNull;
 import androidx.appcompat.app.AlertDialog;
@@ -34,6 +33,9 @@ import org.dhis2.Bindings.ContextExtensionsKt;
 import org.dhis2.Bindings.ViewExtensionsKt;
 import org.dhis2.Components;
 import org.dhis2.R;
+import org.dhis2.data.server.ServerComponent;
+import org.dhis2.data.service.SyncResult;
+import org.dhis2.data.server.ServerComponent;
 import org.dhis2.data.service.workManager.WorkManagerController;
 import org.dhis2.databinding.FragmentSettingsBinding;
 import org.dhis2.usescases.general.FragmentGlobalAbstract;
@@ -95,6 +97,7 @@ public class SyncManagerFragment extends FragmentGlobalAbstract implements SyncM
     private boolean metadataInit;
     private boolean scopeLimitInit;
     private boolean dataWorkRunning;
+    private int theme;
 
     public SyncManagerFragment() {
         // Required empty public constructor
@@ -104,8 +107,11 @@ public class SyncManagerFragment extends FragmentGlobalAbstract implements SyncM
     public void onAttach(@NotNull Context context) {
         super.onAttach(context);
         this.context = context;
-        ((Components) context.getApplicationContext()).userComponent()
-                .plus(new SyncManagerModule(this)).inject(this);
+        ServerComponent serverComponent = ((Components) context.getApplicationContext()).serverComponent();
+        if (serverComponent != null) {
+            ((Components) context.getApplicationContext()).userComponent()
+                    .plus(new SyncManagerModule(this, serverComponent)).inject(this);
+        }
     }
 
     @Override
@@ -390,11 +396,21 @@ public class SyncManagerFragment extends FragmentGlobalAbstract implements SyncM
             binding.syncDataLayout.message.setText(dataText);
             binding.syncDataLayout.message.setTextColor(ContextCompat.getColor(context, R.color.text_black_333));
         } else {
+            String errorMessage;
+            int textColor;
+            if (dataSettings.getSyncResult() != null &&
+                    dataSettings.getSyncResult().equals(SyncResult.INCOMPLETE)) {
+                errorMessage = getString(R.string.sync_incomplete_error_text);
+                textColor = ContextCompat.getColor(context, R.color.text_black_4d4d4d);
+            } else {
+                errorMessage = getString(R.string.sync_error_text);
+                textColor = ContextCompat.getColor(context, R.color.red_060);
+            }
             String dataText = dataSyncSetting()
                     .concat("\n")
-                    .concat(getString(R.string.sync_error_text));
+                    .concat(errorMessage);
             binding.syncDataLayout.message.setText(dataText);
-            binding.syncDataLayout.message.setTextColor(ContextCompat.getColor(context, R.color.red_060));
+            binding.syncDataLayout.message.setTextColor(textColor);
         }
 
         if (dataSettings.getDataHasErrors()) {
@@ -764,7 +780,7 @@ public class SyncManagerFragment extends FragmentGlobalAbstract implements SyncM
         });
     }
 
-    private void clearSmsFocus(){
+    private void clearSmsFocus() {
         binding.settingsSms.settingsSmsReceiver.clearFocus();
         binding.settingsSms.settingsSmsResultSender.clearFocus();
         binding.settingsSms.settingsSmsResultTimeout.clearFocus();

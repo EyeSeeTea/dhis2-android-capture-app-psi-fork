@@ -1,10 +1,11 @@
 package org.dhis2.usescases.teiDashboard.dashboardfragments.teidata
 
 import io.reactivex.Single
+import java.util.Locale
 import org.dhis2.Bindings.applyFilters
 import org.dhis2.Bindings.userFriendlyValue
-import org.dhis2.data.dhislogic.DhisEventUtils
 import org.dhis2.usescases.eventsWithoutRegistration.eventCapture.getProgramStageName
+import org.dhis2.data.dhislogic.DhisPeriodUtils
 import org.dhis2.usescases.teiDashboard.dashboardfragments.teidata.teievents.EventViewModel
 import org.dhis2.usescases.teiDashboard.dashboardfragments.teidata.teievents.EventViewModelType
 import org.dhis2.utils.DateUtils
@@ -21,6 +22,7 @@ import org.hisp.dhis.android.core.event.EventCollectionRepository
 import org.hisp.dhis.android.core.event.EventStatus
 import org.hisp.dhis.android.core.organisationunit.OrganisationUnit
 import org.hisp.dhis.android.core.period.DatePeriod
+import org.hisp.dhis.android.core.period.PeriodType
 import org.hisp.dhis.android.core.program.Program
 import org.hisp.dhis.android.core.trackedentity.TrackedEntityInstance
 
@@ -29,7 +31,7 @@ class TeiDataRepositoryImpl(
     private val programUid: String?,
     private val teiUid: String,
     private val enrollmentUid: String?,
-    private val dhisEventUtils: DhisEventUtils
+    private val periodUtils: DhisPeriodUtils
 ) : TeiDataRepository {
 
     override fun getTEIEnrollmentEvents(
@@ -41,7 +43,8 @@ class TeiDataRepositoryImpl(
         assignedToMe: Boolean,
         eventStatusFilters: MutableList<EventStatus>,
         catOptComboFilters: MutableList<CategoryOptionCombo>,
-        sortingItem: SortingItem?
+        sortingItem: SortingItem?,
+        replaceProgramStageName: Boolean
     ): Single<List<EventViewModel>> {
         var eventRepo = d2.eventModule().events().byEnrollmentUid().eq(enrollmentUid)
 
@@ -59,9 +62,9 @@ class TeiDataRepositoryImpl(
         )
 
         return if (groupedByStage) {
-            getGroupedEvents(eventRepo, selectedStage, sortingItem)
+            getGroupedEvents(eventRepo, selectedStage, sortingItem, replaceProgramStageName)
         } else {
-            getTimelineEvents(eventRepo, sortingItem)
+            getTimelineEvents(eventRepo, sortingItem,replaceProgramStageName)
         }
     }
 
@@ -93,7 +96,8 @@ class TeiDataRepositoryImpl(
     private fun getGroupedEvents(
         eventRepository: EventCollectionRepository,
         selectedStage: String?,
-        sortingItem: SortingItem?
+        sortingItem: SortingItem?,
+        replaceProgramStageName: Boolean = false
     ): Single<List<EventViewModel>> {
         val eventViewModels = mutableListOf<EventViewModel>()
         var eventRepo: EventCollectionRepository
@@ -112,6 +116,14 @@ class TeiDataRepositoryImpl(
 
                     val isSelected = programStage.uid() == selectedStage
 
+                    val canAddEventToEnrollment = enrollmentUid?.let {
+                        programStage.access()?.data()?.write() == true &&
+                            d2.eventModule().eventService().blockingCanAddEventToEnrollment(
+                                it,
+                                programStage.uid()
+                            )
+                    } ?: false
+
                     eventViewModels.add(
                         EventViewModel(
                             EventViewModelType.STAGE,
@@ -120,15 +132,12 @@ class TeiDataRepositoryImpl(
                             eventList.size,
                             if (eventList.isEmpty()) null else eventList[0].lastUpdated(),
                             isSelected,
-                            dhisEventUtils.checkAddEventInEnrollment(
-                                enrollmentUid,
-                                programStage,
-                                isSelected
-                            ),
+                            canAddEventToEnrollment,
                             orgUnitName = "",
                             catComboName = "",
                             dataElementValues = emptyList(),
-                            groupedByStage = true
+                            groupedByStage = true,
+                            displayDate = null
                         )
                     )
                     if (selectedStage != null && selectedStage == programStage.uid()) {
@@ -136,13 +145,14 @@ class TeiDataRepositoryImpl(
                             val showTopShadow = index == 0
                             val showBottomShadow = index == eventList.size - 1
 
-                            val programStageDisplayName = getProgramStageName(d2, event.uid())
-                            val editedProgramStage = programStage.toBuilder().displayName(programStageDisplayName).build();
+                            val finalProgramStage = if (replaceProgramStageName == true)
+                                programStage.toBuilder().displayName(getProgramStageName(d2, event.uid())).build()
+                            else programStage
 
                             eventViewModels.add(
                                 EventViewModel(
                                     EventViewModelType.EVENT,
-                                    editedProgramStage,
+                                    finalProgramStage,
                                     event,
                                     0,
                                     null,
@@ -158,7 +168,11 @@ class TeiDataRepositoryImpl(
                                     ),
                                     groupedByStage = true,
                                     showTopShadow = showTopShadow,
-                                    showBottomShadow = showBottomShadow
+                                    showBottomShadow = showBottomShadow,
+                                    displayDate = periodUtils.getPeriodUIString(
+                                        programStage.periodType() ?: PeriodType.Daily,
+                                        event.eventDate() ?: event.dueDate()!!, Locale.getDefault()
+                                    )
                                 )
                             )
                         }
@@ -170,7 +184,8 @@ class TeiDataRepositoryImpl(
 
     private fun getTimelineEvents(
         eventRepository: EventCollectionRepository,
-        sortingItem: SortingItem?
+        sortingItem: SortingItem?,
+        replaceProgramStageName: Boolean = false
     ): Single<List<EventViewModel>> {
         val eventViewModels = mutableListOf<EventViewModel>()
         var eventRepo = eventRepository
@@ -186,15 +201,16 @@ class TeiDataRepositoryImpl(
                         .uid(event.programStage())
                         .blockingGet()
 
-                    val programStageDisplayName = getProgramStageName(d2, event.uid())
-                    val editedProgramStage = programStage.toBuilder().displayName(programStageDisplayName).build();
+                    val finalProgramStage = if (replaceProgramStageName == true)
+                        programStage.toBuilder().displayName(getProgramStageName(d2, event.uid())).build()
+                    else programStage
 
                     val showTopShadow = index == 0
                     val showBottomShadow = index == eventList.size - 1
                     eventViewModels.add(
                         EventViewModel(
                             EventViewModelType.EVENT,
-                            editedProgramStage,
+                            finalProgramStage,
                             event,
                             0,
                             null,
@@ -204,8 +220,12 @@ class TeiDataRepositoryImpl(
                                 .uid(event.organisationUnit()).blockingGet().displayName()
                                 ?: "",
                             catComboName = getCatComboName(event.attributeOptionCombo()),
-                            dataElementValues = getEventValues(event.uid(), editedProgramStage.uid()),
-                            groupedByStage = false
+                            dataElementValues = getEventValues(event.uid(), finalProgramStage.uid()),
+                            groupedByStage = false,
+                            displayDate = periodUtils.getPeriodUIString(
+                                programStage.periodType() ?: PeriodType.Daily,
+                                event.eventDate() ?: event.dueDate()!!, Locale.getDefault()
+                            )
                         )
                     )
                 }

@@ -1,5 +1,6 @@
 This is a patch version that fixes:
-- ANDROAPP-3773 TEIs in search org unit not being downloaded
-- ANDROAPP-3775 Unique attribute searching
-
+- [ANDROAPP-4093](https://jira.dhis2.org/browse/ANDROAPP-4093) Sync error message in dashboard and home
+- [ANDROAPP-4084](https://jira.dhis2.org/browse/ANDROAPP-4084) Tracker Events sync fix
+- [ANDROAPP-4088](https://jira.dhis2.org/browse/ANDROAPP-4088) Date filter not returning correct number of records
+....
 You can find all the details on Jira and Github.

@@ -12,8 +12,6 @@ import androidx.work.Data;
 import androidx.work.Worker;
 import androidx.work.WorkerParameters;
 
-import com.google.firebase.perf.metrics.AddTrace;
-
 import org.dhis2.App;
 import org.dhis2.R;
 import org.dhis2.data.prefs.PreferenceProvider;
@@ -48,7 +46,6 @@ public class SyncDataWorker extends Worker {
 
     @NonNull
     @Override
-    @AddTrace(name = "DataSyncTrace")
     public Result doWork() {
 
         Objects.requireNonNull(((App) getApplicationContext()).userComponent()).plus(new SyncDataWorkerModule()).inject(this);
@@ -125,10 +122,11 @@ public class SyncDataWorker extends Worker {
         presenter.logTimeToFinish(System.currentTimeMillis() - init, DATA_TIME);
 
         String lastDataSyncDate = DateUtils.dateTimeFormat().format(Calendar.getInstance().getTime());
-        boolean syncOk = presenter.checkSyncStatus();
+        SyncResult syncResult = presenter.checkSyncStatus();
 
         prefs.setValue(Constants.LAST_DATA_SYNC, lastDataSyncDate);
-        prefs.setValue(Constants.LAST_DATA_SYNC_STATUS, isEventOk && isTeiOk && isDataValue && syncOk);
+        prefs.setValue(Constants.LAST_DATA_SYNC_STATUS, isEventOk && isTeiOk && isDataValue && syncResult == SyncResult.SYNC);
+        prefs.setValue(Constants.SYNC_RESULT, syncResult.name());
 
         cancelNotification();
 
