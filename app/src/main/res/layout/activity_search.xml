@@ -14,6 +14,10 @@
         <variable
             name="totalFilters"
             type="Integer" />
+
+        <variable
+            name="navigationInitialPage"
+            type="Integer" />
     </data>
 
     <RelativeLayout
@@ -176,6 +180,7 @@
                 android:layout_marginBottom="16dp"
                 android:layout_marginEnd="16dp"
                 android:onClick="@{()->presenter.clearFilterClick()}"
+                style="?attr/floatingActionButtonSmallStyle"
                 app:backgroundTint="@color/white"
                 app:elevation="4dp"
                 app:fabSize="mini"
@@ -216,6 +221,7 @@
                 android:layout_height="wrap_content"
                 android:visibility="gone"
                 app:elevation="12dp"
+                app:initialPage="@{navigationInitialPage}"
                 app:layout_constraintBottom_toBottomOf="parent"
                 app:menu="@menu/navigation_search_menu" />
 
@@ -225,6 +231,7 @@
                 android:layout_height="wrap_content"
                 android:layout_marginBottom="16dp"
                 android:onClick="@{()->presenter.clearFilterClick()}"
+                style="?attr/floatingActionButtonSmallStyle"
                 app:backgroundTint="@color/white"
                 app:elevation="4dp"
                 app:fabSize="mini"

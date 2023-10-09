@@ -17,6 +17,7 @@ import androidx.core.content.res.ResourcesCompat;
 import androidx.core.view.ViewCompat;
 import androidx.databinding.ViewDataBinding;
 
+import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 import com.google.android.material.textfield.TextInputEditText;
 import com.google.android.material.textfield.TextInputLayout;
 
@@ -28,7 +29,7 @@ import org.dhis2.commons.dialogs.calendarpicker.OnDatePickerListener;
 import org.dhis2.commons.resources.ColorUtils;
 import org.dhis2.databinding.AgeCustomViewAccentBinding;
 import org.dhis2.databinding.AgeCustomViewBinding;
-import org.dhis2.utils.Constants;
+import org.dhis2.commons.Constants;
 import org.dhis2.utils.DateUtils;
 import org.dhis2.utils.customviews.FieldLayout;
 import org.jetbrains.annotations.NotNull;
@@ -58,6 +59,7 @@ public class AgeView extends FieldLayout implements View.OnClickListener {
     private View dayInputLayout;
     private AgeViewModel viewModel;
     private TextView errorView;
+    Date selectedDate;
 
     public AgeView(Context context) {
         super(context);
@@ -72,6 +74,12 @@ public class AgeView extends FieldLayout implements View.OnClickListener {
     public AgeView(Context context, AttributeSet attrs, int defStyleAttr) {
         super(context, attrs, defStyleAttr);
         init(context);
+    }
+
+    @Override
+    public void init(Context context) {
+        super.init(context);
+        listener = ageDate -> selectedDate = ageDate;
     }
 
     public void setLabel(String label, String description) {
@@ -181,7 +189,7 @@ public class AgeView extends FieldLayout implements View.OnClickListener {
         monthPicker.setText(month.getText());
         dayPicker.setText(day.getText());
 
-        return new AlertDialog.Builder(getContext(), R.style.CustomDialog)
+        return new MaterialAlertDialogBuilder(getContext(), R.style.MaterialDialog)
                 .setView(view)
                 .setPositiveButton(R.string.action_accept, (dialog, which) -> handleSingleInputs(
                         isEmpty(yearPicker.getText().toString()) ? 0 : -Integer.valueOf(yearPicker.getText().toString()),
@@ -393,5 +401,9 @@ public class AgeView extends FieldLayout implements View.OnClickListener {
         } else {
             return viewModel.label();
         }
+    }
+
+    public Date getSelectedDate() {
+        return selectedDate;
     }
 }

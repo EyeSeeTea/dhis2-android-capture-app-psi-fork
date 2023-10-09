@@ -1,6 +1,6 @@
 package org.dhis2.usescases.eventsWithoutRegistration.eventCapture;
 
-import org.dhis2.commons.data.FieldWithIssue;
+import org.dhis2.ui.dialogs.bottomsheet.FieldWithIssue;
 import org.dhis2.usescases.eventsWithoutRegistration.eventCapture.model.EventCompletionDialog;
 import org.dhis2.usescases.general.AbstractActivityContracts;
 import org.hisp.dhis.android.core.event.EventStatus;
@@ -89,6 +89,8 @@ public class EventCaptureContract {
         void initNoteCounter();
 
         void refreshTabCounters();
+
+        void refreshProgramStage();
 
         void hideProgress();
 

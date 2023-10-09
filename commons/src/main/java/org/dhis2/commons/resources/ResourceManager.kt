@@ -2,6 +2,7 @@ package org.dhis2.commons.resources
 
 import android.content.Context
 import androidx.annotation.DrawableRes
+import androidx.annotation.PluralsRes
 import androidx.annotation.StringRes
 import androidx.core.content.ContextCompat
 import org.dhis2.commons.R
@@ -10,6 +11,12 @@ import org.hisp.dhis.android.core.D2Manager
 class ResourceManager(val context: Context) {
 
     fun getString(@StringRes stringResource: Int) = getWrapperContext().getString(stringResource)
+
+    fun getString(@StringRes stringResource: Int, vararg arguments: String) =
+        getWrapperContext().getString(stringResource).format(*arguments)
+
+    fun getPlural(@PluralsRes pluralResource: Int, quantity: Int) =
+        getWrapperContext().resources.getQuantityString(pluralResource, quantity)
 
     fun getObjectStyleDrawableResource(icon: String?, @DrawableRes defaultResource: Int): Int {
         return icon?.let {
@@ -47,7 +54,7 @@ class ResourceManager(val context: Context) {
     fun getColorOrDefaultFrom(hexColor: String?): Int {
         return ColorUtils.getColorFrom(
             hexColor,
-            ColorUtils.getPrimaryColor(getWrapperContext(), ColorUtils.ColorType.PRIMARY_LIGHT)
+            ColorUtils.getPrimaryColor(context, ColorUtils.ColorType.PRIMARY_LIGHT)
         )
     }
 
@@ -71,7 +78,11 @@ class ResourceManager(val context: Context) {
 
     fun getWrapperContext() = try {
         LocaleSelector(context, D2Manager.getD2()).updateUiLanguage()
-    } catch (exception: IllegalStateException) {
+    } catch (exception: Exception) {
         context
     }
+
+    fun defaultTableLabel(): String = context.getString(R.string.default_table_header_label)
+    fun defaultEmptyDataSetSectionLabel(): String =
+        context.getString(R.string.default_empty_dataset_section_label)
 }

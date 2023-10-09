@@ -6,8 +6,8 @@ import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
 import de.adorsys.android.securestoragelibrary.SecurePreferences
 import de.adorsys.android.securestoragelibrary.SecureStorageException
-import org.dhis2.commons.date.DateUtils
 import java.util.Date
+import org.dhis2.commons.date.DateUtils
 
 const val LAST_META_SYNC = "last_meta_sync"
 const val LAST_DATA_SYNC = "last_data_sync"
@@ -64,42 +64,48 @@ open class PreferenceProviderImpl(private val context: Context) : PreferenceProv
 
     override fun getString(key: String, default: String?): String? {
         return SecurePreferences.getStringValue(
-            context, key,
+            context,
+            key,
             sharedPreferences.getString(key, default)
         )
     }
 
     override fun getBoolean(key: String, default: Boolean): Boolean {
         return SecurePreferences.getBooleanValue(
-            context, key,
+            context,
+            key,
             sharedPreferences.getBoolean(key, default)
         )
     }
 
     override fun getInt(key: String, default: Int): Int {
         return SecurePreferences.getIntValue(
-            context, key,
+            context,
+            key,
             sharedPreferences.getInt(key, default)
         )
     }
 
     override fun getLong(key: String, default: Long): Long? {
         return SecurePreferences.getLongValue(
-            context, key,
+            context,
+            key,
             sharedPreferences.getLong(key, default)
         )
     }
 
     override fun getFloat(key: String, default: Float): Float? {
         return SecurePreferences.getFloatValue(
-            context, key,
+            context,
+            key,
             sharedPreferences.getFloat(key, default)
         )
     }
 
     override fun getSet(key: String, default: Set<String>): Set<String>? {
         return SecurePreferences.getStringSetValue(
-            context, key,
+            context,
+            key,
             default
         )
     }
@@ -125,15 +131,16 @@ open class PreferenceProviderImpl(private val context: Context) : PreferenceProv
 
     override fun areCredentialsSet(): Boolean {
         return SecurePreferences.getBooleanValue(
-            context, SECURE_CREDENTIALS,
+            context,
+            SECURE_CREDENTIALS,
             sharedPreferences.getBoolean(SECURE_CREDENTIALS, false)
         )
     }
 
     override fun areSameCredentials(serverUrl: String, userName: String, pass: String): Boolean {
         return SecurePreferences.getStringValue(context, SECURE_SERVER_URL, "") == serverUrl &&
-                SecurePreferences.getStringValue(context, SECURE_USER_NAME, "") == userName &&
-                SecurePreferences.getStringValue(context, SECURE_PASS, "") == pass
+            SecurePreferences.getStringValue(context, SECURE_USER_NAME, "") == userName &&
+            SecurePreferences.getStringValue(context, SECURE_PASS, "") == pass
     }
 
     override fun saveJiraCredentials(jiraAuth: String): String {
@@ -169,13 +176,13 @@ open class PreferenceProviderImpl(private val context: Context) : PreferenceProv
     }
 
     override fun lastMetadataSync(): Date? {
-        return getString(LAST_META_SYNC)?.let {lastMetadataSyncString->
+        return getString(LAST_META_SYNC)?.let { lastMetadataSyncString ->
             DateUtils.dateTimeFormat().parse(lastMetadataSyncString)
         }
     }
 
     override fun lastDataSync(): Date? {
-        return getString(LAST_DATA_SYNC)?.let {lastDataSyncString->
+        return getString(LAST_DATA_SYNC)?.let { lastDataSyncString ->
             DateUtils.dateTimeFormat().parse(lastDataSyncString)
         }
     }

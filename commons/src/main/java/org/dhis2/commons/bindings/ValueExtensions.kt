@@ -191,8 +191,8 @@ fun String?.withValueTypeCheck(valueType: ValueType?): String? {
             ValueType.INTEGER_POSITIVE,
             ValueType.INTEGER_NEGATIVE,
             ValueType.INTEGER_ZERO_OR_POSITIVE -> (
-                    it.toIntOrNull() ?: it.toFloat().toInt()
-                    ).toString()
+                it.toIntOrNull() ?: it.toFloat().toInt()
+                ).toString()
             ValueType.UNIT_INTERVAL -> (it.toIntOrNull() ?: it.toFloat()).toString()
             else -> this
         }
@@ -219,12 +219,7 @@ fun TrackedEntityDataValueObjectRepository.blockingGetValueCheck(
     }
 }
 
-private fun check(
-    d2: D2,
-    valueType: ValueType?,
-    optionSetUid: String?,
-    value: String
-): Boolean {
+private fun check(d2: D2, valueType: ValueType?, optionSetUid: String?, value: String): Boolean {
     return when {
         optionSetUid != null -> {
             val optionByCodeExist = d2.optionModule().options().byOptionSetUid().eq(optionSetUid)
@@ -259,9 +254,9 @@ private fun check(
 private fun assureCodeForOptionSet(d2: D2, optionSetUid: String?, value: String): String? {
     return optionSetUid?.let {
         if (d2.optionModule().options()
-                .byOptionSetUid().eq(it)
-                .byName().eq(value)
-                .one().blockingExists()
+            .byOptionSetUid().eq(it)
+            .byName().eq(value)
+            .one().blockingExists()
         ) {
             d2.optionModule().options().byOptionSetUid().eq(it).byName().eq(value).one()
                 .blockingGet().code()

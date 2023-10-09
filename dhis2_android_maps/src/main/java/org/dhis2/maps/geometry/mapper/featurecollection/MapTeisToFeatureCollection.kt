@@ -59,7 +59,7 @@ class MapTeisToFeatureCollection(
                 val relationshipsFeatureCollections =
                     mapRelationshipsToFeatureCollection.map(relationshipModels)
                 relationshipsFeatureCollections.first.forEach { (key, featureCollection) ->
-                    if(key != null) {
+                    if (key != null) {
                         featureCollectionMap[key]?.features()?.addAll(
                             featureCollection.features() ?: listOf()
                         ) ?: run {
@@ -77,8 +77,10 @@ class MapTeisToFeatureCollection(
         return Pair<HashMap<String, FeatureCollection>, BoundingBox>(
             featureCollectionMap,
             BoundingBox.fromLngLats(
-                bounds.westBound, bounds.southBound,
-                bounds.eastBound, bounds.northBound
+                bounds.westBound,
+                bounds.southBound,
+                bounds.eastBound,
+                bounds.northBound
             )
         )
     }

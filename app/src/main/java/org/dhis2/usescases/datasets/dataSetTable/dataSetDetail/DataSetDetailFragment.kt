@@ -14,10 +14,10 @@ import org.dhis2.R
 import org.dhis2.commons.date.toDateSpan
 import org.dhis2.commons.resources.ColorUtils
 import org.dhis2.commons.resources.ResourceManager
-import org.dhis2.commons.ui.MetadataIconData
-import org.dhis2.commons.ui.setUpMetadataIcon
 import org.dhis2.data.dhislogic.DhisPeriodUtils
 import org.dhis2.databinding.FragmentDatasetDetailBinding
+import org.dhis2.ui.MetadataIconData
+import org.dhis2.ui.setUpMetadataIcon
 import org.dhis2.usescases.datasets.dataSetTable.DataSetTableActivity
 import org.dhis2.usescases.general.FragmentGlobalAbstract
 import org.hisp.dhis.android.core.common.ObjectStyle
@@ -64,12 +64,12 @@ class DataSetDetailFragment private constructor() : FragmentGlobalAbstract(), Da
             dataSetUid = it.getString(DATASET_UID, "")
             accessWrite = it.getBoolean(DATASET_ACCESS)
         } ?: throw IllegalArgumentException("Arguments can't be null")
-        context.dataSetTableComponent.plus(
+        context.dataSetTableComponent?.plus(
             DataSetDetailModule(
                 this,
                 dataSetUid
             )
-        ).inject(this)
+        )?.inject(this)
     }
 
     override fun onCreateView(
@@ -163,6 +163,6 @@ class DataSetDetailFragment private constructor() : FragmentGlobalAbstract(), Da
     }
 
     override fun observeReopenChanges(): Flowable<Boolean> {
-        return activity.observeReopenChanges()
+        return activity.observeReopenChanges()!!
     }
 }

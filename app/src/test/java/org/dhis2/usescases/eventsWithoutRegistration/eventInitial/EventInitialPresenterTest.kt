@@ -8,6 +8,7 @@ import com.nhaarman.mockitokotlin2.whenever
 import io.reactivex.Flowable
 import io.reactivex.Observable
 import java.util.Date
+import org.dhis2.commons.matomo.MatomoAnalyticsController
 import org.dhis2.commons.prefs.Preference
 import org.dhis2.commons.prefs.PreferenceProvider
 import org.dhis2.commons.schedulers.SchedulerProvider
@@ -16,7 +17,6 @@ import org.dhis2.form.data.RulesUtilsProvider
 import org.dhis2.usescases.eventsWithoutRegistration.eventCapture.EventFieldMapper
 import org.dhis2.utils.Result
 import org.dhis2.utils.analytics.AnalyticsHelper
-import org.dhis2.utils.analytics.matomo.MatomoAnalyticsController
 import org.hisp.dhis.android.core.common.FeatureType
 import org.hisp.dhis.android.core.common.Geometry
 import org.hisp.dhis.android.core.event.Event
@@ -190,7 +190,14 @@ class EventInitialPresenterTest {
 
         presenter.init("uid", null, "orgUnit", "stage")
         presenter.createEvent(
-            "enrollment", "stage", date, "orgUnit", "catCombo", "catOption", geometry, "tei"
+            "enrollment",
+            "stage",
+            date,
+            "orgUnit",
+            "catCombo",
+            "catOption",
+            geometry,
+            "tei"
         )
 
         verify(view).onEventCreated("event")
@@ -217,7 +224,14 @@ class EventInitialPresenterTest {
 
         presenter.init("uid", null, "orgUnit", "stage")
         presenter.createEvent(
-            "enrollment", "stage", date, "orgUnit", "catCombo", "catOption", geometry, "tei"
+            "enrollment",
+            "stage",
+            date,
+            "orgUnit",
+            "catCombo",
+            "catOption",
+            geometry,
+            "tei"
         )
 
         verify(view).renderError("Error")
@@ -229,9 +243,9 @@ class EventInitialPresenterTest {
         val date = Date()
         initMocks("uid", null, "stage")
         whenever(
-            eventInitialRepository.scheduleEvent(
+            eventInitialRepository.permanentReferral(
                 "enrollment",
-                null,
+                "teiUid",
                 "uid",
                 "stage",
                 date,
@@ -244,21 +258,29 @@ class EventInitialPresenterTest {
 
         presenter.init("uid", null, "orgUnit", "stage")
         presenter.scheduleEventPermanent(
-            "enrollment", null, "stage", date, "orgUnit", "catCombo", "catOption", geometry
+            "enrollment",
+            "teiUid",
+            "stage",
+            date,
+            "orgUnit",
+            "catCombo",
+            "catOption",
+            geometry
         )
 
         verify(view).onEventCreated("event")
     }
 
     @Test
-    fun `Should how error when there is an problem creating a scheduled event permanent`() {
+    fun `Should show error when there is an problem creating a scheduled event permanent`() {
         val geometry = Geometry.builder().type(FeatureType.POINT).build()
         val date = Date()
         initMocks("uid", null, "stage")
+
         whenever(
-            eventInitialRepository.scheduleEvent(
+            eventInitialRepository.permanentReferral(
                 "enrollment",
-                null,
+                "teiUid",
                 "uid",
                 "stage",
                 date,
@@ -271,7 +293,14 @@ class EventInitialPresenterTest {
 
         presenter.init("uid", null, "orgUnit", "stage")
         presenter.scheduleEventPermanent(
-            "enrollment", null, "stage", date, "orgUnit", "catCombo", "catOption", geometry
+            "enrollment",
+            "teiUid",
+            "stage",
+            date,
+            "orgUnit",
+            "catCombo",
+            "catOption",
+            geometry
         )
 
         verify(view).renderError("Error")
@@ -298,7 +327,13 @@ class EventInitialPresenterTest {
 
         presenter.init("uid", null, "orgUnit", "stage")
         presenter.scheduleEvent(
-            "enrollment", "stage", date, "orgUnit", "catCombo", "catOption", geometry
+            "enrollment",
+            "stage",
+            date,
+            "orgUnit",
+            "catCombo",
+            "catOption",
+            geometry
         )
 
         verify(view).onEventCreated("event")
@@ -325,7 +360,13 @@ class EventInitialPresenterTest {
 
         presenter.init("uid", null, "orgUnit", "stage")
         presenter.scheduleEvent(
-            "enrollment", "stage", date, "orgUnit", "catCombo", "catOption", geometry
+            "enrollment",
+            "stage",
+            date,
+            "orgUnit",
+            "catCombo",
+            "catOption",
+            geometry
         )
 
         verify(view).renderError("Error")

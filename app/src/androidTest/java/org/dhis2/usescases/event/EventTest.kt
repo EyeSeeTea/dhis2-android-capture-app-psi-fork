@@ -137,7 +137,7 @@ class EventTest: BaseTest() {
 
     private fun createEventDetails() = EventDetailsUIModel(
         "Alfa",
-        95,
+        91,
         "1/3/2020",
         "OU TEST PARENT"
     )
@@ -148,5 +148,4 @@ class EventTest: BaseTest() {
         "1/6/2020",
         "Ngelehun CHC"
     )
-
 }

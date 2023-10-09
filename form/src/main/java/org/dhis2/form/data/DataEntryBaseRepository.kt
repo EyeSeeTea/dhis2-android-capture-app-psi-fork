@@ -4,6 +4,7 @@ import org.dhis2.form.model.FieldUiModel
 import org.dhis2.form.model.SectionUiModelImpl
 import org.dhis2.form.ui.FieldViewModelFactory
 import org.hisp.dhis.android.core.D2
+import org.hisp.dhis.android.core.imports.TrackerImportConflict
 import org.hisp.dhis.android.core.program.SectionRenderingType
 
 abstract class DataEntryBaseRepository(
@@ -40,8 +41,11 @@ abstract class DataEntryBaseRepository(
         val item = when {
             fieldUiModel.optionSet != null -> {
                 fieldUiModel.apply {
-                    this.optionsToHide = listOf(optionsToHide, optionsInGroupsToHide).flatten()
-                    this.optionsToShow = optionsInGroupsToShow
+                    this.optionSetConfiguration =
+                        optionSetConfiguration?.updateOptionsToHideAndShow(
+                            optionsToHide = listOf(optionsToHide, optionsInGroupsToHide).flatten(),
+                            optionsToShow = optionsInGroupsToShow
+                        )
                 }
             }
             else -> {
@@ -86,5 +90,13 @@ abstract class DataEntryBaseRepository(
             completedFields,
             SectionRenderingType.LISTING.name
         )
+    }
+
+    internal fun getError(conflict: TrackerImportConflict?, dataValue: String?) = conflict?.let {
+        if (it.value() == dataValue) {
+            it.displayDescription()
+        } else {
+            null
+        }
     }
 }

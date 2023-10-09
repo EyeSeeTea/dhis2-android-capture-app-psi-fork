@@ -97,9 +97,7 @@
                 <androidx.constraintlayout.widget.ConstraintLayout
                     android:id="@+id/checkLayouts"
                     android:layout_width="match_parent"
-                    android:layout_height="50dp"
-                    android:gravity="center_vertical"
-                    android:orientation="horizontal">
+                    android:layout_height="wrap_content">
 
                     <LinearLayout
                         android:id="@+id/checkGroup"
@@ -175,12 +173,12 @@
             app:error="@{item.error}"
             app:warning="@{item.warning}"
             app:input_style="@{item}"
-            android:textSize="@dimen/textSize_12"
             app:layout_constraintEnd_toEndOf="parent"
             app:layout_constraintStart_toStartOf="parent"
             android:layout_marginHorizontal="16dp"
             app:layout_constraintTop_toBottomOf="@id/customYesNo"
-            tools:text="This is a error message" />
+            tools:text="This is a error message"
+            tools:textAppearance="@style/warning_appearance" />
 
     </androidx.constraintlayout.widget.ConstraintLayout>
 </layout>

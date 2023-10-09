@@ -13,11 +13,22 @@ import androidx.fragment.app.viewModels
 import androidx.lifecycle.lifecycleScope
 import java.util.Date
 import javax.inject.Inject
-import kotlinx.coroutines.flow.collect
 import org.dhis2.R
+import org.dhis2.commons.Constants.ENROLLMENT_STATUS
+import org.dhis2.commons.Constants.ENROLLMENT_UID
+import org.dhis2.commons.Constants.EVENT_CREATION_TYPE
+import org.dhis2.commons.Constants.EVENT_PERIOD_TYPE
+import org.dhis2.commons.Constants.EVENT_SCHEDULE_INTERVAL
+import org.dhis2.commons.Constants.EVENT_UID
+import org.dhis2.commons.Constants.ORG_UNIT
+import org.dhis2.commons.Constants.PROGRAM_STAGE_UID
+import org.dhis2.commons.Constants.PROGRAM_UID
 import org.dhis2.commons.data.EventCreationType
 import org.dhis2.commons.dialogs.calendarpicker.CalendarPicker
 import org.dhis2.commons.dialogs.calendarpicker.OnDatePickerListener
+import org.dhis2.commons.locationprovider.LocationSettingLauncher
+import org.dhis2.commons.orgunitselector.OUTreeFragment
+import org.dhis2.commons.orgunitselector.OrgUnitSelectorScope
 import org.dhis2.databinding.EventDetailsFragmentBinding
 import org.dhis2.maps.views.MapSelectorActivity
 import org.dhis2.usescases.eventsWithoutRegistration.eventDetails.injection.EventDetailsComponentProvider
@@ -25,19 +36,9 @@ import org.dhis2.usescases.eventsWithoutRegistration.eventDetails.injection.Even
 import org.dhis2.usescases.eventsWithoutRegistration.eventDetails.models.EventCategory
 import org.dhis2.usescases.eventsWithoutRegistration.eventDetails.models.EventDetails
 import org.dhis2.usescases.general.FragmentGlobalAbstract
-import org.dhis2.utils.Constants.ENROLLMENT_STATUS
-import org.dhis2.utils.Constants.ENROLLMENT_UID
-import org.dhis2.utils.Constants.EVENT_CREATION_TYPE
-import org.dhis2.utils.Constants.EVENT_PERIOD_TYPE
-import org.dhis2.utils.Constants.EVENT_SCHEDULE_INTERVAL
-import org.dhis2.utils.Constants.EVENT_UID
-import org.dhis2.utils.Constants.ORG_UNIT
-import org.dhis2.utils.Constants.PROGRAM_STAGE_UID
-import org.dhis2.utils.Constants.PROGRAM_UID
 import org.dhis2.utils.category.CategoryDialog
 import org.dhis2.utils.category.CategoryDialog.Companion.TAG
 import org.dhis2.utils.customviews.CatOptionPopUp
-import org.dhis2.utils.customviews.OrgUnitDialog
 import org.dhis2.utils.customviews.PeriodDialog
 import org.hisp.dhis.android.core.common.FeatureType
 import org.hisp.dhis.android.core.enrollment.EnrollmentStatus
@@ -65,6 +66,15 @@ class EventDetailsFragment : FragmentGlobalAbstract() {
                     result.data!!.getStringExtra(MapSelectorActivity.LOCATION_TYPE_EXTRA)!!
                 val coordinates = result.data?.getStringExtra(MapSelectorActivity.DATA_EXTRA)
                 viewModel.onLocationByMapSelected(FeatureType.valueOf(featureType), coordinates)
+            }
+        }
+
+    private val locationDisabledSettings =
+        registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
+            if (locationProvider?.hasLocationEnabled() == true) {
+                viewModel.requestCurrentLocation()
+            } else {
+                viewModel.cancelCoordinateRequest()
             }
         }
 
@@ -102,11 +112,12 @@ class EventDetailsFragment : FragmentGlobalAbstract() {
             )
         )?.inject(this)
         binding = DataBindingUtil.inflate(
-            inflater, R.layout.event_details_fragment,
+            inflater,
+            R.layout.event_details_fragment,
             container,
             false
         )
-        binding.lifecycleOwner = this
+        binding.lifecycleOwner = viewLifecycleOwner
         binding.viewModel = viewModel
         return binding.root
     }
@@ -161,12 +172,20 @@ class EventDetailsFragment : FragmentGlobalAbstract() {
         }
 
         viewModel.showEnableLocationMessage = {
-            displayMessage(getString(R.string.enable_location_message))
+            LocationSettingLauncher.requestEnableLocationSetting(
+                requireContext(),
+                {
+                    locationDisabledSettings.launch(
+                        LocationSettingLauncher.locationSourceSettingIntent()
+                    )
+                },
+                {
+                    viewModel.cancelCoordinateRequest()
+                }
+            )
         }
 
-        viewModel.onButtonClickCallback = {
-            onButtonCallback?.invoke() ?: viewModel.onActionButtonClick()
-        }
+        viewModel.onButtonClickCallback = onButtonCallback
 
         viewModel.showEventUpdateStatus = { message ->
             displayMessage(message)
@@ -216,18 +235,22 @@ class EventDetailsFragment : FragmentGlobalAbstract() {
     }
 
     private fun showOrgUnitDialog() {
-        val dialog = OrgUnitDialog.getInstace()
-            .setTitle(getString(R.string.org_unit))
-            .setMultiSelection(false)
-            .setOrgUnits(viewModel.eventOrgUnit.value.orgUnits)
-            .setProgram(viewModel.eventOrgUnit.value.programUid)
-
-        dialog.setPossitiveListener {
-            viewModel.setUpOrgUnit(selectedOrgUnit = dialog.selectedOrgUnit)
-            dialog.dismiss()
-        }
-        dialog.setNegativeListener { dialog.dismiss() }
-        dialog.show(requireActivity().supportFragmentManager, "ORG_UNIT_DIALOG")
+        OUTreeFragment.Builder()
+            .showAsDialog()
+            .withPreselectedOrgUnits(
+                viewModel.eventOrgUnit.value.selectedOrgUnit
+                    ?.let { listOf(it.uid()) }
+                    ?: emptyList()
+            )
+            .singleSelection()
+            .orgUnitScope(
+                OrgUnitSelectorScope.ProgramCaptureScope(viewModel.eventOrgUnit.value.programUid!!)
+            )
+            .onSelection { selectedOrgUnits ->
+                viewModel.setUpOrgUnit(selectedOrgUnit = selectedOrgUnits.first().uid())
+            }
+            .build()
+            .show(childFragmentManager, "ORG_UNIT_DIALOG")
     }
 
     private fun showNoOrgUnitsDialog() {

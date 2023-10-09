@@ -35,7 +35,8 @@ import org.dhis2.commons.filters.FiltersAdapter;
 import org.dhis2.commons.filters.data.FilterRepository;
 import org.dhis2.commons.schedulers.SchedulerProvider;
 import org.dhis2.data.dhislogic.DhisPeriodUtils;
-import org.dhis2.form.model.DispatcherProvider;
+import org.dhis2.commons.viewmodel.DispatcherProvider;
+import org.dhis2.commons.matomo.MatomoAnalyticsController;
 import org.dhis2.utils.customviews.navigationbar.NavigationPageConfigurator;
 import org.hisp.dhis.android.core.D2;
 
@@ -60,9 +61,10 @@ public class DataSetDetailModule {
                                              SchedulerProvider schedulerProvider,
                                              FilterManager filterManager,
                                              FilterRepository filterRepository,
-                                             DisableHomeFiltersFromSettingsApp disableHomeFiltersFromSettingsApp) {
+                                             DisableHomeFiltersFromSettingsApp disableHomeFiltersFromSettingsApp,
+                                             MatomoAnalyticsController matomoAnalyticsController) {
         return new DataSetDetailPresenter(view, dataSetDetailRepository, schedulerProvider, filterManager, filterRepository,
-                disableHomeFiltersFromSettingsApp);
+                disableHomeFiltersFromSettingsApp,matomoAnalyticsController);
     }
 
     @Provides

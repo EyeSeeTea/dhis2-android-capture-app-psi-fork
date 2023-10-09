@@ -90,7 +90,10 @@ class RulesUtilsProviderImplTest {
             randomFieldViewModel("uid4", ValueType.TEXT, "section2"),
             randomFieldViewModel("uid5", ValueType.TEXT, "section2"),
             randomFieldViewModel("uid6", ValueType.TEXT, "section3"),
-            randomFieldViewModel("uid7", ValueType.TEXT, "section3")
+            randomFieldViewModel("uid7", ValueType.TEXT, "section3"),
+            randomFieldViewModel("uid8", ValueType.INTEGER_POSITIVE, "section4"),
+            randomFieldViewModel("uid9", ValueType.NUMBER, "section4"),
+            randomFieldViewModel("uid10", ValueType.BOOLEAN, "section4")
         )
     }
 
@@ -110,7 +113,6 @@ class RulesUtilsProviderImplTest {
             section,
             null,
             true,
-            null,
             null,
             null,
             null,
@@ -198,7 +200,7 @@ class RulesUtilsProviderImplTest {
 
         Assert.assertFalse(testFieldViewModels.contains(testingUid))
         verify(valueStore, times(1)).saveWithTypeCheck(testingUid, null)
-        assertTrue(result.fieldsToUpdate.contains(testingUid))
+        assertTrue(result.fieldsToUpdate.any { it.fieldUid == testingUid })
     }
 
     @Test
@@ -340,7 +342,7 @@ class RulesUtilsProviderImplTest {
         assertTrue(!testFieldViewModels[testingUid]!!.editable)
         assertTrue(!testFieldViewModels[testingUid]!!.editable)
         assertTrue(result.fieldsToUpdate.size == 1)
-        assertTrue(result.fieldsToUpdate.contains(testingUid))
+        assertTrue(result.fieldsToUpdate.any { it.fieldUid == testingUid })
     }
 
     @Test
@@ -489,6 +491,7 @@ class RulesUtilsProviderImplTest {
             null,
             null,
             null,
+            false,
             null
         )
 
@@ -544,6 +547,7 @@ class RulesUtilsProviderImplTest {
             null,
             null,
             null,
+            false,
             null
         )
 
@@ -560,7 +564,8 @@ class RulesUtilsProviderImplTest {
 
         mockD2OptionGroupCalls(
             "optionGroupUid",
-            "optionToHide1", "optionToHide2"
+            "optionToHide1",
+            "optionToHide2"
         )
 
         val result = ruleUtils.applyRuleEffects(
@@ -583,7 +588,8 @@ class RulesUtilsProviderImplTest {
     fun `RuleActionShowOptionGroup should execute callback action`() {
         mockD2OptionGroupCalls(
             "optionGroupUid",
-            "optionToShow1", "optionToShow2"
+            "optionToShow1",
+            "optionToShow2"
         )
         testRuleEffects.add(
             RuleEffect.create(
@@ -616,6 +622,7 @@ class RulesUtilsProviderImplTest {
             null,
             null,
             null,
+            false,
             null
         )
 
@@ -667,7 +674,44 @@ class RulesUtilsProviderImplTest {
         Assert.assertFalse(testFieldViewModels.contains(testingUid))
         verify(valueStore, times(1)).saveWithTypeCheck(testingUid, null)
         verify(valueStore, times(0)).saveWithTypeCheck(testingUid, "data")
-        assertTrue(result.fieldsToUpdate.contains(testingUid))
+        assertTrue(result.fieldsToUpdate.any { it.fieldUid == testingUid })
+    }
+
+    @Test
+    fun `Should format value to assign`() {
+        val integerUid = "uid8"
+        val numberUid = "uid9"
+        val booleanUid = "uid10"
+        testRuleEffects.add(
+            RuleEffect.create(
+                "ruleUid",
+                RuleActionAssign.create("content", "5.0", integerUid),
+                "5.0"
+            )
+        )
+        testRuleEffects.add(
+            RuleEffect.create(
+                "ruleUid",
+                RuleActionAssign.create("content", "2.52", numberUid),
+                "2.52"
+            )
+        )
+        testRuleEffects.add(
+            RuleEffect.create(
+                "ruleUid",
+                RuleActionAssign.create("content", "1", booleanUid),
+                "1"
+            )
+        )
+        ruleUtils.applyRuleEffects(
+            true,
+            testFieldViewModels,
+            testRuleEffects,
+            valueStore
+        )
+        assertTrue(testFieldViewModels[integerUid]?.value == "5")
+        assertTrue(testFieldViewModels[numberUid]?.value == "2.52")
+        assertTrue(testFieldViewModels[booleanUid]?.value == "true")
     }
 
     private fun mockD2OptionGroupCalls(optionGroupUid: String, vararg optionUidsToReturn: String) {

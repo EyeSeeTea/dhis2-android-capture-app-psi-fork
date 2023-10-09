@@ -1,6 +1,7 @@
 package org.dhis2.usescases.eventsWithoutRegistration.eventCapture.eventCaptureFragment;
 
 import static org.dhis2.commons.extensions.ViewExtensionsKt.closeKeyboard;
+import static org.dhis2.utils.granularsync.SyncStatusDialogNavigatorKt.OPEN_ERROR_LOCATION;
 
 import android.content.Context;
 import android.content.Intent;
@@ -15,13 +16,12 @@ import androidx.databinding.DataBindingUtil;
 import androidx.fragment.app.FragmentTransaction;
 
 import org.dhis2.R;
-import org.dhis2.data.forms.dataentry.FormView;
+import org.dhis2.commons.Constants;
 import org.dhis2.databinding.SectionSelectorFragmentBinding;
-import org.dhis2.form.data.FormRepository;
-import org.dhis2.form.model.DispatcherProvider;
+import org.dhis2.form.model.EventRecords;
+import org.dhis2.form.ui.FormView;
 import org.dhis2.usescases.eventsWithoutRegistration.eventCapture.EventCaptureActivity;
 import org.dhis2.usescases.general.FragmentGlobalAbstract;
-import org.dhis2.utils.Constants;
 import org.jetbrains.annotations.NotNull;
 
 import javax.inject.Inject;
@@ -34,20 +34,15 @@ public class EventCaptureFormFragment extends FragmentGlobalAbstract implements 
     @Inject
     EventCaptureFormPresenter presenter;
 
-    @Inject
-    FormRepository formRepository;
-
-    @Inject
-    DispatcherProvider coroutineDispatcher;
-
     private EventCaptureActivity activity;
     private SectionSelectorFragmentBinding binding;
     private FormView formView;
 
-    public static EventCaptureFormFragment newInstance(String eventUid) {
+    public static EventCaptureFormFragment newInstance(String eventUid, Boolean openErrorSection) {
         EventCaptureFormFragment fragment = new EventCaptureFormFragment();
         Bundle args = new Bundle();
         args.putString(Constants.EVENT_UID, eventUid);
+        args.putBoolean(OPEN_ERROR_LOCATION, openErrorSection);
         fragment.setArguments(args);
         return fragment;
     }
@@ -67,9 +62,7 @@ public class EventCaptureFormFragment extends FragmentGlobalAbstract implements 
     @Override
     public void onCreate(@Nullable @org.jetbrains.annotations.Nullable Bundle savedInstanceState) {
         formView = new FormView.Builder()
-                .repository(formRepository)
                 .locationProvider(locationProvider)
-                .dispatcher(coroutineDispatcher)
                 .onLoadingListener(loading -> {
                     if (loading) {
                         activity.showProgress();
@@ -85,12 +78,16 @@ public class EventCaptureFormFragment extends FragmentGlobalAbstract implements 
                 .onPercentageUpdate(percentage -> {
                     activity.updatePercentage(percentage);
                     return Unit.INSTANCE;
-                })
-                .onDataIntegrityResult(result -> {
+                }).onItemChangeListener(rowAction ->{
+                    activity.refreshProgramStageName();
+                    return Unit.INSTANCE;
+                }).onDataIntegrityResult(result -> {
                     presenter.handleDataIntegrityResult(result);
                     return Unit.INSTANCE;
                 })
                 .factory(activity.getSupportFragmentManager())
+                .setRecords(new EventRecords(getArguments().getString(Constants.EVENT_UID)))
+                .openErrorLocation(getArguments().getBoolean(OPEN_ERROR_LOCATION, false))
                 .build();
         activity.setFormEditionListener(this);
         super.onCreate(savedInstanceState);

@@ -5,7 +5,7 @@ import com.nhaarman.mockitokotlin2.any
 import com.nhaarman.mockitokotlin2.doReturn
 import com.nhaarman.mockitokotlin2.mock
 import com.nhaarman.mockitokotlin2.verify
-import com.nhaarman.mockitokotlin2.verifyZeroInteractions
+import com.nhaarman.mockitokotlin2.verifyNoMoreInteractions
 import com.nhaarman.mockitokotlin2.whenever
 import io.reactivex.Completable
 import io.reactivex.Flowable
@@ -14,21 +14,30 @@ import io.reactivex.processors.BehaviorProcessor
 import io.reactivex.processors.FlowableProcessor
 import java.io.File
 import java.util.Date
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.test.UnconfinedTestDispatcher
+import kotlinx.coroutines.test.setMain
 import org.dhis2.commons.filters.FilterManager
 import org.dhis2.commons.filters.Filters
 import org.dhis2.commons.filters.data.FilterRepository
+import org.dhis2.commons.matomo.Categories.Companion.HOME
+import org.dhis2.commons.matomo.MatomoAnalyticsController
 import org.dhis2.commons.prefs.Preference.Companion.DEFAULT_CAT_COMBO
 import org.dhis2.commons.prefs.Preference.Companion.PIN
 import org.dhis2.commons.prefs.Preference.Companion.PREF_DEFAULT_CAT_OPTION_COMBO
 import org.dhis2.commons.prefs.Preference.Companion.SESSION_LOCKED
 import org.dhis2.commons.prefs.PreferenceProvider
 import org.dhis2.commons.schedulers.SchedulerProvider
+import org.dhis2.commons.viewmodel.DispatcherProvider
 import org.dhis2.data.schedulers.TrampolineSchedulerProvider
 import org.dhis2.data.server.UserManager
+import org.dhis2.data.service.SyncStatusController
+import org.dhis2.data.service.VersionRepository
 import org.dhis2.data.service.workManager.WorkManagerController
+import org.dhis2.usescases.login.SyncIsPerformedInteractor
 import org.dhis2.usescases.settings.DeleteUserData
-import org.dhis2.utils.analytics.matomo.Categories.Companion.HOME
-import org.dhis2.utils.analytics.matomo.MatomoAnalyticsController
 import org.hisp.dhis.android.core.category.CategoryCombo
 import org.hisp.dhis.android.core.category.CategoryOptionCombo
 import org.hisp.dhis.android.core.configuration.internal.DatabaseAccount
@@ -39,6 +48,7 @@ import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
 
+@OptIn(ExperimentalCoroutinesApi::class)
 class MainPresenterTest {
 
     private lateinit var presenter: MainPresenter
@@ -52,6 +62,14 @@ class MainPresenterTest {
     private val matomoAnalyticsController: MatomoAnalyticsController = mock()
     private val userManager: UserManager = mock()
     private val deleteUserData: DeleteUserData = mock()
+    private val syncIsPerfomedInteractor: SyncIsPerformedInteractor = mock()
+    private val syncStatusController: SyncStatusController = mock()
+    private val versionRepository: VersionRepository = mock()
+    private val testingDispatcher = UnconfinedTestDispatcher()
+    private val dispatcherProvider: DispatcherProvider = mock {
+        on { io() } doReturn testingDispatcher
+        on { ui() } doReturn testingDispatcher
+    }
 
     @Rule
     @JvmField
@@ -59,6 +77,8 @@ class MainPresenterTest {
 
     @Before
     fun setUp() {
+        Dispatchers.setMain(testingDispatcher)
+        whenever(versionRepository.newAppVersion) doReturn MutableSharedFlow()
         presenter =
             MainPresenter(
                 view,
@@ -70,7 +90,11 @@ class MainPresenterTest {
                 filterRepository,
                 matomoAnalyticsController,
                 userManager,
-                deleteUserData
+                deleteUserData,
+                syncIsPerfomedInteractor,
+                syncStatusController,
+                versionRepository,
+                dispatcherProvider
             )
     }
 
@@ -118,12 +142,16 @@ class MainPresenterTest {
         whenever(repository.logOut()) doReturn Completable.complete()
 
         whenever(repository.accountsCount()) doReturn 1
+        whenever(userManager.d2) doReturn mock()
+        whenever(userManager.d2.dataStoreModule()) doReturn mock()
+        whenever(userManager.d2.dataStoreModule().localDataStore()) doReturn mock()
+        whenever(userManager.d2.dataStoreModule().localDataStore().value(PIN)) doReturn mock()
 
         presenter.logOut()
 
         verify(workManagerController).cancelAllWork()
         verify(preferences).setValue(SESSION_LOCKED, false)
-        verify(preferences).setValue(PIN, null)
+        verify(userManager.d2.dataStoreModule().localDataStore().value(PIN)).blockingDeleteIfExist()
         verify(view).goToLogin(1, false)
     }
 
@@ -270,7 +298,7 @@ class MainPresenterTest {
 
         presenter.trackDhis2Server()
 
-        verifyZeroInteractions(matomoAnalyticsController)
+        verifyNoMoreInteractions(matomoAnalyticsController)
     }
 
     private fun presenterMocks() {

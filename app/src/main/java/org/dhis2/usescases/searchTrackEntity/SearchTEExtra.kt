@@ -1,7 +1,7 @@
 package org.dhis2.usescases.searchTrackEntity
 
 import android.os.Bundle
-import org.dhis2.utils.Constants
+import org.dhis2.commons.Constants
 
 enum class SearchTEExtra(val key: String) {
     TEI_UID("TRACKED_ENTITY_UID"),
@@ -10,11 +10,9 @@ enum class SearchTEExtra(val key: String) {
     QUERY_VALUES("QUERY_DATA_VALUES")
 }
 
-fun SearchTEActivity.teiUidExtra() =
-    intent.getStringExtra(SearchTEExtra.TEI_UID.key)
+fun SearchTEActivity.teiUidExtra() = intent.getStringExtra(SearchTEExtra.TEI_UID.key)
 
-fun SearchTEActivity.programUidExtra() =
-    intent.getStringExtra(SearchTEExtra.PROGRAM_UID.key)
+fun SearchTEActivity.programUidExtra() = intent.getStringExtra(SearchTEExtra.PROGRAM_UID.key)
 
 fun SearchTEActivity.queryDataExtra(savedInstanceState: Bundle?): Map<String, String> {
     return when {

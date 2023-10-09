@@ -1,13 +1,16 @@
 package org.dhis2.usescases.searchTrackEntity;
 
 import static android.app.Activity.RESULT_OK;
+import static org.dhis2.commons.matomo.Actions.MAP_VISUALIZATION;
+import static org.dhis2.commons.matomo.Actions.OPEN_ANALYTICS;
+import static org.dhis2.commons.matomo.Actions.SYNC_TEI;
+import static org.dhis2.commons.matomo.Categories.SEARCH;
+import static org.dhis2.commons.matomo.Categories.TRACKER_LIST;
+import static org.dhis2.commons.matomo.Labels.CLICK;
 import static org.dhis2.usescases.teiDashboard.dashboardfragments.relationships.RelationshipFragment.TEI_A_UID;
 import static org.dhis2.utils.analytics.AnalyticsConstants.ADD_RELATIONSHIP;
 import static org.dhis2.utils.analytics.AnalyticsConstants.CREATE_ENROLL;
 import static org.dhis2.utils.analytics.AnalyticsConstants.DELETE_RELATIONSHIP;
-import static org.dhis2.utils.analytics.matomo.Actions.SYNC_TEI;
-import static org.dhis2.utils.analytics.matomo.Categories.TRACKER_LIST;
-import static org.dhis2.utils.analytics.matomo.Labels.CLICK;
 
 import android.content.Intent;
 import android.graphics.drawable.Drawable;
@@ -26,16 +29,18 @@ import org.dhis2.commons.filters.FilterItem;
 import org.dhis2.commons.filters.FilterManager;
 import org.dhis2.commons.filters.data.FilterRepository;
 import org.dhis2.commons.filters.workingLists.TeiFilterToWorkingListItemMapper;
+import org.dhis2.commons.matomo.MatomoAnalyticsController;
+import org.dhis2.commons.orgunitselector.OUTreeFragment;
+import org.dhis2.commons.orgunitselector.OrgUnitSelectorScope;
 import org.dhis2.commons.prefs.Preference;
 import org.dhis2.commons.prefs.PreferenceProvider;
 import org.dhis2.commons.resources.ColorUtils;
 import org.dhis2.commons.resources.D2ErrorUtils;
 import org.dhis2.commons.resources.ObjectStyleUtils;
 import org.dhis2.commons.schedulers.SchedulerProvider;
+import org.dhis2.data.service.SyncStatusController;
 import org.dhis2.maps.model.StageStyle;
 import org.dhis2.utils.analytics.AnalyticsHelper;
-import org.dhis2.utils.analytics.matomo.MatomoAnalyticsController;
-import org.dhis2.utils.customviews.OrgUnitDialog;
 import org.hisp.dhis.android.core.D2;
 import org.hisp.dhis.android.core.common.FeatureType;
 import org.hisp.dhis.android.core.maintenance.D2Error;
@@ -51,11 +56,12 @@ import java.util.Collections;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
+import java.util.stream.Collectors;
 
-import dispatch.core.DispatcherProvider;
 import io.reactivex.Observable;
 import io.reactivex.disposables.CompositeDisposable;
 import io.reactivex.subjects.BehaviorSubject;
+import kotlin.Unit;
 import timber.log.Timber;
 
 public class SearchTEPresenter implements SearchTEContractsModule.Presenter {
@@ -81,6 +87,7 @@ public class SearchTEPresenter implements SearchTEContractsModule.Presenter {
 
     private final DisableHomeFiltersFromSettingsApp disableHomeFilters;
     private final MatomoAnalyticsController matomoAnalyticsController;
+    private SyncStatusController syncStatusController;
 
     public SearchTEPresenter(SearchTEContractsModule.View view,
                              D2 d2,
@@ -93,7 +100,8 @@ public class SearchTEPresenter implements SearchTEContractsModule.Presenter {
                              TeiFilterToWorkingListItemMapper workingListMapper,
                              FilterRepository filterRepository,
                              DisableHomeFiltersFromSettingsApp disableHomeFilters,
-                             MatomoAnalyticsController matomoAnalyticsController) {
+                             MatomoAnalyticsController matomoAnalyticsController,
+                             SyncStatusController syncStatusController) {
         this.view = view;
         this.preferences = preferenceProvider;
         this.searchRepository = searchRepository;
@@ -104,6 +112,7 @@ public class SearchTEPresenter implements SearchTEContractsModule.Presenter {
         this.filterRepository = filterRepository;
         this.disableHomeFilters = disableHomeFilters;
         this.matomoAnalyticsController = matomoAnalyticsController;
+        this.syncStatusController = syncStatusController;
         compositeDisposable = new CompositeDisposable();
         selectedProgram = initialProgram != null ? d2.programModule().programs().uid(initialProgram).blockingGet() : null;
         currentProgram = BehaviorSubject.createDefault(initialProgram != null ? initialProgram : "");
@@ -143,10 +152,11 @@ public class SearchTEPresenter implements SearchTEContractsModule.Presenter {
 
         compositeDisposable.add(
                 searchRepository.programsWithRegistration(trackedEntityType)
+                        .map(this::applySyncStatus)
                         .subscribeOn(schedulerProvider.io())
                         .observeOn(schedulerProvider.ui())
                         .subscribe(programs -> {
-                                    Collections.sort(programs, (program1, program2) -> program1.displayName().compareToIgnoreCase(program2.displayName()));
+                                    Collections.sort(programs, (program1, program2) -> program1.getDisplayName().compareToIgnoreCase(program2.getDisplayName()));
                                     if (selectedProgram != null) {
                                         setProgram(selectedProgram);
                                     } else {
@@ -279,24 +289,23 @@ public class SearchTEPresenter implements SearchTEContractsModule.Presenter {
     public void enroll(String programUid, String uid, HashMap<String, String> queryData) {
         selectedEnrollmentDate = Calendar.getInstance().getTime();
 
-        OrgUnitDialog orgUnitDialog = OrgUnitDialog.getInstace().setMultiSelection(false);
-        orgUnitDialog.setPossitiveListener(v -> {
-                    if (orgUnitDialog.getSelectedOrgUnit() != null && !orgUnitDialog.getSelectedOrgUnit().isEmpty())
-                        showCalendar(orgUnitDialog.getSelectedOrgUnitModel(), programUid, uid, queryData);
-                    orgUnitDialog.dismiss();
-                })
-                .setNegativeListener(v -> orgUnitDialog.dismiss());
-
         compositeDisposable.add(getOrgUnits()
                 .subscribeOn(schedulerProvider.io())
                 .observeOn(schedulerProvider.ui())
                 .subscribe(
                         allOrgUnits -> {
                             if (allOrgUnits.size() > 1) {
-                                orgUnitDialog.setOrgUnits(allOrgUnits);
-                                orgUnitDialog.setProgram(programUid);
-                                if (!orgUnitDialog.isAdded())
-                                    orgUnitDialog.show(view.getAbstracContext().getSupportFragmentManager(), "OrgUnitEnrollment");
+                                new OUTreeFragment.Builder()
+                                        .showAsDialog()
+                                        .singleSelection()
+                                        .onSelection(selectedOrgUnits -> {
+                                            if (!selectedOrgUnits.isEmpty())
+                                                showCalendar(selectedOrgUnits.get(0), programUid, uid, queryData);
+                                            return Unit.INSTANCE;
+                                        })
+                                        .orgUnitScope(new OrgUnitSelectorScope.ProgramCaptureScope(programUid))
+                                        .build()
+                                        .show(view.getAbstracContext().getSupportFragmentManager(), "OrgUnitEnrollment");
                             } else if (allOrgUnits.size() == 1)
                                 showCalendar(allOrgUnits.get(0), programUid, uid, queryData);
                         },
@@ -586,7 +595,27 @@ public class SearchTEPresenter implements SearchTEContractsModule.Presenter {
     }
 
     @Override
+    public void trackSearchAnalytics() {
+        matomoAnalyticsController.trackEvent(SEARCH, OPEN_ANALYTICS, CLICK);
+    }
+
+    @Override
+    public void trackSearchMapVisualization() {
+        matomoAnalyticsController.trackEvent(SEARCH, MAP_VISUALIZATION, CLICK);
+    }
+
+    @Override
     public void setOpeningFilterToNone() {
         filterRepository.collapseAllFilters();
+    }
+
+    public List<ProgramSpinnerModel> applySyncStatus(List<Program> programs) {
+        return programs.stream().map(program -> new ProgramSpinnerModel(
+                program.uid(),
+                program.displayName(),
+                syncStatusController.observeDownloadProcess().getValue().isProgramDownloading(
+                        program.uid()
+                )
+        )).collect(Collectors.toList());
     }
 }

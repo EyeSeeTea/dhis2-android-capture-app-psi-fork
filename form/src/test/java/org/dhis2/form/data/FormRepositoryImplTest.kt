@@ -26,6 +26,7 @@ import org.hisp.dhis.rules.models.RuleActionAssign
 import org.hisp.dhis.rules.models.RuleEffect
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
+import org.junit.Assert.fail
 import org.junit.Before
 import org.junit.Test
 
@@ -157,7 +158,8 @@ class FormRepositoryImplTest {
                 "",
                 RuleActionAssign.create(
                     null,
-                    "assignedValue", "uid001"
+                    "assignedValue",
+                    "uid001"
                 )
             )
         )
@@ -172,7 +174,7 @@ class FormRepositoryImplTest {
             fieldsWithErrors = emptyList(),
             fieldsWithWarnings = emptyList(),
             unsupportedRules = emptyList(),
-            fieldsToUpdate = listOf("uid001"),
+            fieldsToUpdate = listOf(FieldWithNewValue("uid001", "newValue")),
             configurationErrors = emptyList(),
             stagesToHide = emptyList(),
             optionsToHide = emptyMap(),
@@ -225,6 +227,35 @@ class FormRepositoryImplTest {
         assertTrue(repository.runDataIntegrityCheck(false) is SuccessfulResult)
     }
 
+    @Test
+    fun `Concurrent crash test`() {
+        val ruleEffects = emptyList<RuleEffect>()
+        whenever(dataEntryRepository.list()) doReturn Flowable.just(provideMandatoryItemList())
+        whenever(ruleEngineRepository.calculate()) doReturn ruleEffects
+        whenever(dataEntryRepository.isEvent) doReturn true
+        whenever(
+            rulesUtilsProvider.applyRuleEffects(any(), any(), any(), any())
+        ) doReturn RuleUtilsProviderResult(
+            canComplete = true,
+            messageOnComplete = null,
+            fieldsWithErrors = emptyList(),
+            fieldsWithWarnings = emptyList(),
+            unsupportedRules = emptyList(),
+            fieldsToUpdate = listOf(FieldWithNewValue("uid002", "newValue")),
+            configurationErrors = emptyList(),
+            stagesToHide = emptyList(),
+            optionsToHide = emptyMap(),
+            optionGroupsToHide = emptyMap(),
+            optionGroupsToShow = emptyMap()
+        )
+        try {
+            repository.fetchFormItems()
+            assertTrue(true)
+        } catch (e: Exception) {
+            fail()
+        }
+    }
+
     private fun mockList(listToReturn: List<FieldUiModel>) {
         whenever(dataEntryRepository.sectionUids()) doReturn Flowable.just(mockedSections())
         whenever(dataEntryRepository.list()) doReturn Flowable.just(listToReturn)
@@ -252,7 +283,8 @@ class FormRepositoryImplTest {
             label = "field1",
             valueType = ValueType.TEXT,
             programStageSection = "section1",
-            uiEventFactory = null
+            uiEventFactory = null,
+            optionSetConfiguration = null
         ),
         FieldUiModelImpl(
             uid = "uid002",
@@ -261,7 +293,8 @@ class FormRepositoryImplTest {
             label = "field2",
             valueType = ValueType.TEXT,
             programStageSection = "section1",
-            uiEventFactory = null
+            uiEventFactory = null,
+            optionSetConfiguration = null
         ),
         FieldUiModelImpl(
             uid = "uid003",
@@ -270,7 +303,8 @@ class FormRepositoryImplTest {
             label = "field3",
             valueType = ValueType.TEXT,
             programStageSection = "section1",
-            uiEventFactory = null
+            uiEventFactory = null,
+            optionSetConfiguration = null
         )
     )
 
@@ -298,7 +332,8 @@ class FormRepositoryImplTest {
             label = "field1",
             valueType = ValueType.TEXT,
             programStageSection = "section1",
-            uiEventFactory = null
+            uiEventFactory = null,
+            optionSetConfiguration = null
         ),
         FieldUiModelImpl(
             uid = "uid002",
@@ -308,7 +343,8 @@ class FormRepositoryImplTest {
             label = "field2",
             valueType = ValueType.TEXT,
             programStageSection = "section1",
-            uiEventFactory = null
+            uiEventFactory = null,
+            optionSetConfiguration = null
         ),
         FieldUiModelImpl(
             uid = "uid003",
@@ -318,7 +354,8 @@ class FormRepositoryImplTest {
             label = "field3",
             valueType = ValueType.TEXT,
             programStageSection = "section1",
-            uiEventFactory = null
+            uiEventFactory = null,
+            optionSetConfiguration = null
         ),
         section2()
     )
@@ -334,7 +371,8 @@ class FormRepositoryImplTest {
             valueType = ValueType.TEXT,
             programStageSection = "section1",
             uiEventFactory = null,
-            mandatory = true
+            mandatory = true,
+            optionSetConfiguration = null
         ),
         FieldUiModelImpl(
             uid = "uid002",
@@ -344,7 +382,8 @@ class FormRepositoryImplTest {
             label = "field2",
             valueType = ValueType.TEXT,
             programStageSection = "section1",
-            uiEventFactory = null
+            uiEventFactory = null,
+            optionSetConfiguration = null
         )
     )
 }

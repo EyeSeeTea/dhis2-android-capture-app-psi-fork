@@ -12,7 +12,7 @@
 
         <variable
             name="presenter"
-            type="org.dhis2.usescases.datasets.dataSetTable.DataSetTableContract.Presenter" />
+            type="org.dhis2.usescases.datasets.dataSetTable.DataSetTablePresenter" />
     </data>
 
     <androidx.constraintlayout.widget.ConstraintLayout
@@ -25,6 +25,7 @@
             style="@style/DhisBottomNavigationView"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
+            app:initialPage="1"
             app:layout_constraintBottom_toBottomOf="parent"
             app:menu="@menu/navigation_dataset_menu" />
 
@@ -119,6 +120,7 @@
                     android:layout_width="match_parent"
                     android:layout_height="0dp"
                     android:background="@color/white_faf"
+                    app:clipCorners="@{16}"
                     app:layout_constraintBottom_toBottomOf="parent"
                     app:layout_constraintTop_toBottomOf="@id/toolbar">
 
@@ -133,14 +135,13 @@
                         app:tabMode="scrollable"
                         app:tabTextAppearance="@style/DhisTabText" />
 
-                    <androidx.viewpager2.widget.ViewPager2
-                        android:id="@+id/viewPager"
+                    <FrameLayout
+                        android:id="@+id/content"
                         android:layout_width="match_parent"
                         android:layout_height="0dp"
                         app:layout_constraintBottom_toBottomOf="parent"
-                        app:layout_constraintTop_toBottomOf="@id/tab_layout"
-                        app:layout_constraintVertical_bias="1.0"
-                        tools:background="@color/red_060" />
+                        app:layout_constraintTop_toBottomOf="@id/tab_layout"/>
+
                 </androidx.constraintlayout.widget.ConstraintLayout>
 
 

@@ -2,14 +2,13 @@ plugins {
     id 'com.android.library'
     id 'kotlin-android'
     id 'kotlin-kapt'
+    id 'com.autonomousapps.dependency-analysis' version "1.19.0"
 }
-
-def libraries = rootProject.ext.libraries
-def versions = rootProject.ext.versions
+apply from: "$project.rootDir/jacoco/jacoco.gradle"
 
 android {
     compileSdkVersion versions.sdk
-    buildToolsVersion versions.tools
+    namespace "org.dhis2.maps"
 
     defaultConfig {
         minSdkVersion versions.minSdk
@@ -25,7 +24,7 @@ android {
     }
 
     buildTypes {
-        debug{
+        debug {
 
         }
         release {
@@ -34,26 +33,39 @@ android {
         }
     }
     compileOptions {
-        sourceCompatibility JavaVersion.VERSION_1_8
-        targetCompatibility JavaVersion.VERSION_1_8
+        sourceCompatibility versions.sourceCompat
+        targetCompatibility versions.targetCompat
     }
 
     buildFeatures {
         dataBinding true
     }
 
+    flavorDimensions "default"
+
     kotlinOptions {
-        jvmTarget = '1.8'
+        jvmTarget = versions.targetCompat
     }
 }
 
 dependencies {
-
     implementation project(":commons")
+    api(libs.maps.maplibre) {
+        exclude group: 'com.google.android.gms'
+    }
+    api(libs.maps.geojson) {
+        exclude group: 'com.google.android.gms'
+    }
+    implementation(libs.maps.markerViewPlugin) {
+        exclude group: 'com.mapbox.mapboxsdk', module: 'mapbox-android-sdk'
+    }
+    implementation(libs.maps.annotationPlugin) {
+        exclude group: 'com.mapbox.mapboxsdk', module: 'mapbox-android-sdk'
+    }
 
-    //region Mapbox
-    api "com.mapbox.mapboxsdk:mapbox-android-sdk:${libraries.mapboxsdk}"
-    implementation "com.mapbox.mapboxsdk:mapbox-android-plugin-markerview-v8:${libraries.mapboxmarkerview}"
-    implementation "com.mapbox.mapboxsdk:mapbox-android-plugin-annotation-v9:${libraries.mapboxannotation}"
-    //endregion
+    androidTestImplementation libs.test.mockitoAndroid
+    androidTestImplementation libs.test.mockitoCore
+    testImplementation libs.test.mockitoCore
+    testImplementation libs.test.mockitoInline
+    testImplementation libs.test.mockitoKotlin
 }

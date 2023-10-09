@@ -7,11 +7,23 @@ import com.nhaarman.mockitokotlin2.doReturn
 import com.nhaarman.mockitokotlin2.mock
 import com.nhaarman.mockitokotlin2.times
 import com.nhaarman.mockitokotlin2.verify
+import com.nhaarman.mockitokotlin2.verifyNoMoreInteractions
 import com.nhaarman.mockitokotlin2.whenever
 import io.reactivex.Single
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.test.UnconfinedTestDispatcher
+import kotlinx.coroutines.test.setMain
+import org.dhis2.commons.Constants.DATA_NOW
+import org.dhis2.commons.Constants.META_NOW
+import org.dhis2.commons.matomo.MatomoAnalyticsController
 import org.dhis2.commons.prefs.PreferenceProvider
+import org.dhis2.commons.resources.ResourceManager
+import org.dhis2.commons.viewmodel.DispatcherProvider
 import org.dhis2.data.schedulers.TrampolineSchedulerProvider
 import org.dhis2.data.server.UserManager
+import org.dhis2.data.service.VersionRepository
 import org.dhis2.data.service.workManager.WorkManagerController
 import org.dhis2.data.service.workManager.WorkerItem
 import org.dhis2.data.service.workManager.WorkerType
@@ -21,19 +33,17 @@ import org.dhis2.usescases.settings.models.MetadataSettingsViewModel
 import org.dhis2.usescases.settings.models.ReservedValueSettingsViewModel
 import org.dhis2.usescases.settings.models.SMSSettingsViewModel
 import org.dhis2.usescases.settings.models.SyncParametersViewModel
-import org.dhis2.utils.Constants.DATA_NOW
-import org.dhis2.utils.Constants.META_NOW
 import org.dhis2.utils.analytics.AnalyticsHelper
-import org.dhis2.utils.analytics.matomo.MatomoAnalyticsController
 import org.hisp.dhis.android.core.D2
 import org.hisp.dhis.android.core.settings.LimitScope
 import org.junit.Before
 import org.junit.Test
 import org.mockito.Mockito
 
+@OptIn(ExperimentalCoroutinesApi::class)
 class SyncManagerPresenterTest {
 
-    private lateinit var presenter: SyncManagerContracts.Presenter
+    private lateinit var presenter: SyncManagerPresenter
     private val d2: D2 = Mockito.mock(D2::class.java, Mockito.RETURNS_DEEP_STUBS)
     private val schedulers = TrampolineSchedulerProvider()
     private val gatewayValidator: GatewayValidator = mock()
@@ -46,9 +56,18 @@ class SyncManagerPresenterTest {
     private val analyticsHelper: AnalyticsHelper = mock()
     private val errorMapper: ErrorModelMapper = mock()
     private val matomoAnalyticsController: MatomoAnalyticsController = mock()
+    private val resourcesManager: ResourceManager = mock()
+    private val versionRepository: VersionRepository = mock()
+    private val testingDispatcher = UnconfinedTestDispatcher()
+    private val dispatcherProvider: DispatcherProvider = mock {
+        on { io() } doReturn testingDispatcher
+        on { ui() } doReturn testingDispatcher
+    }
 
     @Before
     fun setUp() {
+        Dispatchers.setMain(testingDispatcher)
+        whenever(versionRepository.newAppVersion) doReturn MutableSharedFlow()
         presenter = SyncManagerPresenter(
             d2,
             schedulers,
@@ -60,12 +79,16 @@ class SyncManagerPresenterTest {
             view,
             analyticsHelper,
             errorMapper,
-            matomoAnalyticsController
+            matomoAnalyticsController,
+            resourcesManager,
+            versionRepository,
+            dispatcherProvider
         )
     }
 
     @Test
     fun `Should init settings values`() {
+        whenever(resourcesManager.getString(any())) doReturn ""
         presenter.init()
         whenever(
             settingsRepository.metaSync(userManager)
@@ -310,14 +333,48 @@ class SyncManagerPresenterTest {
     }
 
     @Test
-    fun `Should show message on wipe`() {
-        presenter.onWipeData()
-        verify(view, times(1)).wipeDatabase()
-    }
-
-    @Test
     fun `Should open clicked item`() {
         presenter.onItemClick(SettingItem.DATA_SYNC)
         verify(view).openItem(SettingItem.DATA_SYNC)
+    }
+
+    @Test
+    fun `Should enabled sms settings when gateway and timeout are correctly filled`() {
+        whenever(view.isGatewayValid) doReturn true
+        whenever(view.isResultTimeoutValid) doReturn true
+        presenter.setSmsSettingsViewModel(mockedSMSViewModel())
+
+        presenter.checkGatewayAndTimeoutAreValid()
+        verify(view).isGatewayValid
+        verify(view).isResultTimeoutValid
+        verify(view).enabledSMSSwitchAndSender(mockedSMSViewModel())
+    }
+
+    @Test
+    fun `Should not enabled sms settings when gateway and timeout are missing`() {
+        whenever(view.isGatewayValid) doReturn false
+        whenever(view.isResultTimeoutValid) doReturn false
+        presenter.checkGatewayAndTimeoutAreValid()
+        verify(view).isGatewayValid
+        verifyNoMoreInteractions(view)
+    }
+
+    @Test
+    fun `Should not enabled sms settings when gateway has an error and timeout is filled`() {
+        whenever(view.isGatewayValid) doReturn false
+        whenever(view.isResultTimeoutValid) doReturn true
+        presenter.checkGatewayAndTimeoutAreValid()
+        verify(view).isGatewayValid
+        verifyNoMoreInteractions(view)
+    }
+
+    @Test
+    fun `Should not enabled sms settings when gateway is correctly filled and timeout is empty`() {
+        whenever(view.isGatewayValid) doReturn true
+        whenever(view.isResultTimeoutValid) doReturn false
+        presenter.checkGatewayAndTimeoutAreValid()
+        verify(view).isGatewayValid
+        verify(view).isResultTimeoutValid
+        verifyNoMoreInteractions(view)
     }
 }
