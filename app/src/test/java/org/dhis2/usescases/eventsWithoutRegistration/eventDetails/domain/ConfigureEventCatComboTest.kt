@@ -8,6 +8,7 @@ import org.hisp.dhis.android.core.category.CategoryCombo
 import org.hisp.dhis.android.core.category.CategoryOption
 import org.hisp.dhis.android.core.category.CategoryOptionCombo
 import org.hisp.dhis.android.core.event.Event
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -48,7 +49,7 @@ class ConfigureEventCatComboTest {
         // Given a default category combo
         whenever(categoryCombo.isDefault) doReturn true
         whenever(
-            repository.getCatOptionCombos(CATEGORY_COMBO_UID)
+            repository.getCatOptionCombos(CATEGORY_COMBO_UID),
         ) doReturn listOf(categoryOptionCombo)
 
         // When catCombo is invoked
@@ -68,14 +69,19 @@ class ConfigureEventCatComboTest {
         }
         val selectedCategoryOption = Pair(CATEGORY_UID, CATEGORY_OPTION_UID)
         whenever(
-            repository.getCatOption(CATEGORY_OPTION_UID)
+            repository.getCatOption(CATEGORY_OPTION_UID),
         ) doReturn categoryOption
+        whenever(
+            repository.getCategoryOptionCombo(CATEGORY_COMBO_UID, listOf(CATEGORY_OPTION_UID)),
+        ) doReturn CATEGORY_OPTION_COMBO_UID
 
         // When catCombo is invoked
         val eventCatCombo = configureEventCatCombo.invoke(selectedCategoryOption).first()
 
         // Then should be completed
         assertTrue(eventCatCombo.isCompleted)
+        // And the EventCatCombo uid should be set
+        assertEquals(eventCatCombo.uid, CATEGORY_OPTION_COMBO_UID)
     }
 
     @Test
@@ -87,7 +93,7 @@ class ConfigureEventCatComboTest {
             on { uid() } doReturn CATEGORY_OPTION_UID
         }
         whenever(
-            repository.getCatOption(CATEGORY_OPTION_UID)
+            repository.getCatOption(CATEGORY_OPTION_UID),
         ) doReturn categoryOption
 
         // When catCombo is invoked
